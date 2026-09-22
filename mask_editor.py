@@ -32,6 +32,7 @@ def _load_tk() -> None:
 
 
 MAX_REGIONS = 64
+EDITOR_TITLE = 'Geforce NR — HUD Mask Editor'
 MIN_REGION_SIZE = 2
 CAPTURE_DELAY_MS = 180
 MAX_PREVIEW_WIDTH = 1000
@@ -198,7 +199,7 @@ class MaskEditor:
 
         self.window = tk.Toplevel(parent)
         self.window.withdraw()
-        self.window.title("HUD Mask Editor")
+        self.window.title(EDITOR_TITLE)
         self.window.configure(background="#111a1d")
         self.window.protocol("WM_DELETE_WINDOW", self.cancel)
         self.window.resizable(False, False)
@@ -275,7 +276,7 @@ class MaskEditor:
                 pass
             self.window.destroy()
             messagebox.showerror(
-                "HUD Mask Editor",
+                EDITOR_TITLE,
                 f"Could not open the mask editor.\n\n{error}",
                 parent=self.parent,
             )
@@ -389,7 +390,7 @@ class MaskEditor:
         self._configure_style()
         outer = ttk.Frame(self.window, style="Mask.App.TFrame", padding=14)
         outer.grid(row=0, column=0, sticky="nsew")
-        ttk.Label(outer, text="HUD Mask Editor", style="Mask.Header.TLabel").grid(
+        ttk.Label(outer, text=EDITOR_TITLE, style="Mask.Header.TLabel").grid(
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
         )
 
@@ -776,7 +777,7 @@ class MaskEditor:
             )
         except Exception as error:
             messagebox.showerror(
-                "HUD Mask Editor",
+                EDITOR_TITLE,
                 f"Could not save the mask profile.\n\n{error}",
                 parent=self.window,
             )
@@ -787,7 +788,7 @@ class MaskEditor:
                 self.on_saved()
             except Exception as error:
                 messagebox.showerror(
-                    "HUD Mask Editor",
+                    EDITOR_TITLE,
                     f"The mask was saved, but the interface could not refresh.\n\n{error}",
                     parent=self.parent,
                 )

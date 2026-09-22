@@ -23,7 +23,7 @@ They do not replace Core/Lab binaries or promote a production default.
 
 ## Daily desktop app
 
-Open **GFN HUD Guard** from the Windows desktop. Start the GFN game first,
+Open **Geforce NR** from the Windows desktop. Start the GFN game first,
 refresh the game list if needed, and click **Start**. HUD Mask is off by default:
 NR 1280x720 with NVOFA 1280x720 / G2 / Fast and full 2560x1440 residual output
 at the measured source size. **Stop safely** ends only this panel's owned session.
@@ -80,7 +80,7 @@ and shuts down the GPU worker.
 
 The panel uses the existing Windows Python/Tk runtime. `install_daily_ui.ps1`
 creates the desktop shortcut and an on-demand interactive task named
-`GFN-HUD-Guard-Panel`; it installs no autostart trigger. Existing Core/Lab
+`Geforce-NR-Panel`; it installs no autostart trigger. Existing Core/Lab
 entry points and binaries remain intact. `daily_ui_probe.py` and
 `probe_daily_ui.ps1` are bounded development-only UI verification helpers.
 

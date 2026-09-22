@@ -36,7 +36,7 @@ class RecordedEngine(Engine):
                 for hwnd in self.win.worker_windows(self.owner[0]):
                     title = ctypes.create_unicode_buffer(256)
                     self.win.u.GetWindowTextW(hwnd, title, len(title))
-                    if title.value == 'GFN HUD Guard':
+                    if title.value == 'Geforce NR':
                         self.win.u.ShowWindow(hwnd, 9)
                         self.win.u.SetForegroundWindow.argtypes = [wintypes.HWND]
                         self.win.u.SetForegroundWindow.restype = wintypes.BOOL
@@ -48,6 +48,12 @@ class RecordedEngine(Engine):
 
     def _configure(self):
         super()._configure()
+        if self.owner:
+            for hwnd in self.win.worker_windows(self.transport.process.pid):
+                title = ctypes.create_unicode_buffer(256)
+                self.win.u.GetWindowTextW(hwnd, title, len(title))
+                if title.value == 'NeuralScreen':
+                    self.win.u.SetWindowTextW(hwnd, 'Geforce NR — Output')
         atomic_json(self.root / 'geometry.json', dict(wgc=self.full, work=self.work,
                      flow=self.gray_shape, window=self.win.rect(self.target.hwnd)))
 

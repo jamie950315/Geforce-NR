@@ -1,4 +1,4 @@
-# GFN HUD Guard live validation
+# Geforce NR live validation
 
 Public source repository: https://github.com/jamie950315/Geforce-NR .
 The public branch is `main`; local `codex/public-main` tracks it. The original
@@ -41,7 +41,7 @@ The flow-width1280 limit is a software allow-list, not a measured hardware cap.
 Do not present offline warp error as live perceptual quality or promote a new
 default without the corresponding configuration decision.
 
-The Windows desktop shortcut `GFN HUD Guard` opens `daily_ui.py` using the
+The Windows desktop shortcut `Geforce NR` opens `daily_ui.py` using the
 existing Core Python/Tk runtime. `daily_backend.py` owns only its own subprocess
 session; stop is bound to a unique owner token and the run/controller records,
 not the Windows venv bootstrap PID. Daily runs use `--daily --seconds 0`, disable
@@ -53,6 +53,9 @@ selected GFN games and are bound to normalized window title plus exact geometry.
 Only the built-in Cyberpunk preset requires Cyberpunk 2077 at 2560x1440.
 Preserve unrelated active controllers and desktop shortcuts.
 The panel and UI-probe scheduled tasks are on-demand only, with no autostart.
+The app display name is `Geforce NR`, with `Geforce NR — HUD Mask Editor` and
+`Geforce NR — Output` for its auxiliary windows. Desktop/task name migration
+preserves the original Core/Lab paths and internal singleton identifiers.
 
 HUD-impact comparison uses same-command-list source/pre-HUD/post-HUD readbacks,
 not separate-time screenshots. Nine current G2/NR720 samples show tone/contrast

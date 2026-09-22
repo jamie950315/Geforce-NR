@@ -43,15 +43,15 @@ def main():
     if args.open_shortcut:
         from win32com.shell import shell, shellcon
         desktop = Path(shell.SHGetFolderPath(0, shellcon.CSIDL_DESKTOPDIRECTORY, 0, 0))
-        os.startfile(desktop/'GFN HUD Guard.lnk')
+        os.startfile(desktop/'Geforce NR.lnk')
         time.sleep(2)
     candidates = []
-    expected_title = 'HUD Mask Editor' if args.editor else 'GFN HUD Guard'
+    expected_title = 'Geforce NR — HUD Mask Editor' if args.editor else 'Geforce NR'
     win32gui.EnumWindows(lambda h, _: candidates.append(h) if win32gui.IsWindowVisible(h)
                          and win32gui.GetWindowText(h) == expected_title
                          and win32gui.GetClassName(h) != '#32770' else None, None)
     if len(candidates) != 1:
-        raise RuntimeError('Expected one visible GFN HUD Guard panel')
+        raise RuntimeError('Expected one visible Geforce NR panel')
     hwnd = candidates[0]
     if args.discard_changes:
         if not args.editor:

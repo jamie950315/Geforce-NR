@@ -1,4 +1,4 @@
-"""Native daily-use interface for the isolated GFN HUD Guard launcher.
+"""Native daily-use interface for the isolated Geforce NR launcher.
 
 The module is intentionally safe to import: it does not import tkinter, create a
 window, acquire the single-instance mutex, or initialize the backend until
@@ -17,10 +17,11 @@ from pathlib import Path
 from typing import Any
 
 
-APP_TITLE = "GFN HUD Guard"
+APP_TITLE = "Geforce NR"
 APP_DIR = Path(__file__).resolve().parent
 ERROR_LOG = APP_DIR / "daily-ui-error.log"
 POLL_INTERVAL_MS = 500
+# Keep the existing singleton ID across branding changes.
 MUTEX_NAME = r"Local\GFNHUDGuardDailyUI"
 
 RECOMMENDED_SETTINGS: dict[str, Any] = {
@@ -306,7 +307,7 @@ class DailyApp:
         header = self.ttk.Frame(outer, style="App.TFrame")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         header.columnconfigure(0, weight=1)
-        self.ttk.Label(header, text="GFN HUD Guard", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        self.ttk.Label(header, text=APP_TITLE, style="Header.TLabel").grid(row=0, column=0, sticky="w")
         self.ttk.Label(
             header,
             text="Neural Rendering with optional, user-drawn HUD protection",
@@ -747,14 +748,14 @@ def main() -> int:
         root.mainloop()
         return 0
     except Exception:
-        _write_error_log("GFN HUD Guard daily UI startup failure")
+        _write_error_log("Geforce NR daily UI startup failure")
         if root is not None:
             try:
                 root.destroy()
             except Exception:
                 pass
         _show_startup_error(
-            "GFN HUD Guard could not start.\n\n"
+            "Geforce NR could not start.\n\n"
             f"A diagnostic traceback was written to:\n{ERROR_LOG}"
         )
         return 1

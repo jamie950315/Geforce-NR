@@ -14,7 +14,7 @@ if 'GeForce NOW' not in win32gui.GetWindowText(win32gui.GetForegroundWindow()):
     raise RuntimeError('GFN must be foreground')
 visible = []
 win32gui.EnumWindows(lambda h,_: visible.append(win32gui.GetWindowText(h)) if win32gui.IsWindowVisible(h) else None, None)
-if 'NeuralScreen' in visible:
+if any(title in visible for title in ('NeuralScreen', 'Geforce NR — Output')):
     raise RuntimeError('Local overlay must be stopped')
 out = ROOT/'raw-game-samples'
 out.mkdir(exist_ok=False)

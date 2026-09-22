@@ -1,7 +1,7 @@
 param([string]$ProbeArgs = '')
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$name = 'GFN-HUD-Guard-UI-Probe'
+$name = 'Geforce-NR-UI-Probe'
 $old = Get-ScheduledTask $name -ErrorAction SilentlyContinue
 if ($old -and $old.State -eq 'Running') { throw 'Existing UI probe is preserved' }
 $principal = (Get-ScheduledTask 'GFN-Codex-Live-Run-20260921').Principal
