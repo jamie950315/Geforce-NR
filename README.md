@@ -1,4 +1,4 @@
-# GFN HUD Guard
+# Geforce-NR
 
 Experimental Windows controls and validation helpers for local Neural Rendering
 on a GeForce NOW window, with optional, user-drawn HUD protection.

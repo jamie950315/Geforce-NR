@@ -1,6 +1,6 @@
 # GFN HUD Guard live validation
 
-Public source repository: https://github.com/jamie950315/gfn-hud-guard .
+Public source repository: https://github.com/jamie950315/Geforce-NR .
 The public branch is `main`; local `codex/public-main` tracks it. The original
 local `master` history is retained for recovery and is not published because its
 commit metadata contains private contact information. Do not push all branches
