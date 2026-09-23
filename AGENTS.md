@@ -1,12 +1,12 @@
 # Geforce NR live validation
 
 Public source repository: https://github.com/jamie950315/Geforce-NR .
-The public branch is `main`; local `codex/public-main` tracks it. The original
-local `master` history is retained for recovery and is not published because its
-commit metadata contains private contact information. Do not push all branches
-or tags. Use the configured GitHub noreply identity for public commits. Public
-distribution is source-only and does not include Core/Lab dependencies or NVIDIA
-runtime/model binaries; keep the README scope and artifact exclusions intact.
+The public branch is `main`; local `main` tracks `origin/main`. Historical local
+commits contain private contact information. Do not publish recovered history
+or push all branches or tags. Use the configured GitHub noreply identity for
+public commits. Public distribution is source-only and does not include Core/Lab
+dependencies or NVIDIA runtime/model binaries; keep the README scope and
+artifact exclusions intact.
 
 This workspace holds an isolated daily UI and validation helpers for the Windows deployment.
 Target: CyberTitanV3, Windows, RTX 4070 SUPER. SSH alias `ctps` requires
