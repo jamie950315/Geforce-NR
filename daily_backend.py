@@ -99,6 +99,8 @@ class DailyController:
             (t['hwnd'], t['pid'], t['created']) == (target['hwnd'], target['pid'], target['created'])), None)
         if current is None or current['title'] != target['title'] or self.win.u.IsIconic(current['hwnd']):
             raise RuntimeError('The selected game changed, closed, or was minimized. Restore it and refresh.')
+        if (current['width'], current['height']) != (target['width'], target['height']):
+            raise RuntimeError('The selected game size changed. Refresh the game list before starting.')
         return current
 
     def load_mask_profile(self, target):
@@ -119,7 +121,7 @@ class DailyController:
                     raise ValueError('This preset requires Cyberpunk 2077 at 2560 x 1440; draw custom regions instead.')
                 from mask_profiles import validate_mask
                 validate_mask(self.root/'cyberpunk-1440p.hgm', 2560, 1440)
-                return dict(usable=True, detail=prefix+'Built-in Cyberpunk 2077 preset is available.')
+                return dict(usable=True, detail=prefix+'Built-in gameplay preset is available. Menus and captions may need a custom mask.')
             profile = self.load_mask_profile(target)
             count = len(profile['rectangles']) if profile else 0
             if count:
@@ -194,6 +196,9 @@ class DailyController:
         args = [str(python), str(self.root/'live_run.py'), '--name', name,
                 '--hwnd', str(current['hwnd']), '--mode', value['mode'], '--seconds', '0', '--daily',
                 '--owner-pid', str(os.getpid()), '--owner-created', str(owner_created), '--owner-token', self.owner_token,
+                '--target-pid', str(current['pid']), '--target-created', str(current['created']),
+                '--target-title', current['title'], '--target-width', str(current['width']),
+                '--target-height', str(current['height']),
                 '--height', str(value['nr_height']), '--flow-width', str(value['flow_width']),
                 '--flow-grid', str(value['flow_grid']), '--flow-preset', value['flow_preset']]
         if value['mode'] == 'guard':

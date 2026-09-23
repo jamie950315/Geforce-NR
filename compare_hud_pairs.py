@@ -11,42 +11,87 @@ from PIL import Image, ImageDraw, ImageFont
 from validate_live_pairs import local_artifact
 
 
+def capture_metadata(pairs):
+    paths = sorted(pairs.glob('pair-*.json'))
+    if len(paths) != 3:
+        raise ValueError('Expected three actual captured pairs; an empty run is not evidence')
+    captures = []
+    used_files = set()
+    for path in paths:
+        meta = json.loads(path.read_text(encoding='utf-8'))
+        required = dict(schema=1, capture_kind='wgc', same_command_list=True,
+                        source_fresh=True, nvofa_used=True, hud_guard=True)
+        if any(meta.get(key) != value for key, value in required.items()):
+            raise ValueError('Comparison requires verified fresh same-command-list WGC/NVOFA frames')
+        for key in ('width', 'height', 'hwnd', 'frame_index', 'capture_serial',
+                    'source_qpc', 'copy_submission_fence'):
+            if type(meta.get(key)) is not int or meta[key] <= 0:
+                raise ValueError(f'{path.name}: invalid {key}')
+        files = [local_artifact(pairs, meta[key]) for key in ('source', 'pre_hud', 'post_hud')]
+        if any(file in used_files for file in files) or len(set(files)) != 3:
+            raise ValueError('Capture files must be unique across all three frames')
+        used_files.update(files)
+        expected_bytes = meta['width'] * meta['height'] * 4
+        if any(file.stat().st_size != expected_bytes for file in files):
+            raise ValueError('Invalid packed frame length')
+        captures.append((meta, files))
+    captures.sort(key=lambda item: item[0]['frame_index'])
+    if len({(meta['width'], meta['height'], meta['hwnd']) for meta, _ in captures}) != 1:
+        raise ValueError('Capture geometry or WGC target changed')
+    for key in ('frame_index', 'capture_serial', 'source_qpc', 'copy_submission_fence'):
+        values = [meta[key] for meta, _ in captures]
+        if any(b <= a for a, b in zip(values, values[1:])):
+            raise ValueError(f'{key} must increase across captured frames')
+    return captures
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('run', type=Path)
     ap.add_argument('--regions', type=Path)
+    ap.add_argument('--all-frames', action='store_true', help='Write source, NR, and Guard PNGs for every captured frame')
     args = ap.parse_args()
     pairs = args.run/'live-pairs'
     out = args.run/'hud-comparison'
-    out.mkdir(exist_ok=True)
     regions = json.loads(args.regions.read_text()) if args.regions else {}
+    captures = capture_metadata(pairs)
+    width, height = captures[0][0]['width'], captures[0][0]['height']
+    if not isinstance(regions, dict):
+        raise ValueError('Regions must map safe names to pixel bounds')
+    for name, bounds in regions.items():
+        if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9-]+', name):
+            raise ValueError('Unsafe region output name')
+        if (not isinstance(bounds, list) or len(bounds) != 4
+                or any(type(value) is not int for value in bounds)):
+            raise ValueError('ROI requires four integer pixel bounds')
+        x0, y0, x1, y1 = bounds
+        if not (0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height):
+            raise ValueError('ROI is outside the matched source')
+    out.mkdir(exist_ok=True)
     results = []
-    metadata_files = sorted(pairs.glob('pair-*.json'))
-    if len(metadata_files) != 3:
-        raise ValueError('Expected three actual captured pairs; an empty run is not evidence')
-    for metadata in metadata_files:
-        meta = json.loads(metadata.read_text())
-        if not all(meta.get(key) is True for key in ('same_command_list', 'source_fresh', 'nvofa_used')) or meta.get('capture_kind') != 'wgc':
-            raise ValueError('Comparison requires verified fresh same-command-list WGC/NVOFA frames')
+    frame_records = []
+    for index, (meta, paths) in enumerate(captures):
         width, height = meta['width'], meta['height']
         frames = {}
-        for key in ('source', 'pre_hud', 'post_hud'):
-            path = local_artifact(pairs, meta[key])
+        files = {}
+        for key, path in zip(('source', 'pre_hud', 'post_hud'), paths):
             blob = path.read_bytes()
-            if len(blob) != width*height*4:
-                raise ValueError('Invalid packed frame length')
             frames[key] = Image.frombytes('RGBA', (width, height), blob).convert('RGB')
-        first = metadata == metadata_files[0]
+            files[key] = dict(name=path.name, sha256=hashlib.sha256(blob).hexdigest())
+        frame_records.append(dict(frame_index=meta['frame_index'], capture_serial=meta['capture_serial'],
+                                  source_qpc=meta['source_qpc'], files=files))
+        first = index == 0
         if first:
             frames['source'].save(out/'source.png')
             frames['pre_hud'].save(out/'unprotected-nr.png')
             frames['post_hud'].save(out/'guard.png')
+        if args.all_frames:
+            frame_dir = out/'frames'
+            frame_dir.mkdir(exist_ok=True)
+            for key, label in (('source', 'source'), ('pre_hud', 'unprotected-nr'), ('post_hud', 'guard')):
+                frames[key].save(frame_dir/f'{meta["frame_index"]:010d}-{label}.png')
         for name, bounds in regions.items():
-            if not re.fullmatch(r'[a-z0-9-]+', name):
-                raise ValueError('Unsafe region output name')
             x0, y0, x1, y1 = bounds
-            if not (0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height):
-                raise ValueError('ROI is outside the matched source')
             crops = {key: image.crop(bounds) for key, image in frames.items()}
             source = np.asarray(crops['source'], dtype=np.int16)
             nr = np.asarray(crops['pre_hud'], dtype=np.int16)
@@ -75,11 +120,9 @@ def main():
                     draw.text((i*tile_width+8, 10), label, fill='white', font=font)
                     sheet.paste(crops[key].resize((tile_width, tile_height), Image.Resampling.NEAREST), (i*tile_width, 40))
                 sheet.save(out/(name+'.png'))
-    if not results and regions:
-        raise ValueError('No captured pairs were found')
     manifest_path = args.run/'manifest.json'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
-    summary = dict(rows=results, sample_count=len(metadata_files),
+    summary = dict(rows=results, sample_count=len(captures), frames=frame_records,
         settings=manifest['settings'], worker_sha256=manifest['integrity']['worker_sha256'],
         run_manifest_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         scope='Identical live frames/history. ROI metrics include background; '

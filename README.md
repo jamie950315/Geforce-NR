@@ -17,6 +17,20 @@ on another machine. Screenshots, game/account data, runtime logs, local settings
 user masks, credentials, and generated binaries are excluded from this repository.
 This project is unofficial and is not affiliated with or endorsed by NVIDIA.
 
+Before installing the daily desktop shortcut, run the read-only layout check
+from the deployment directory:
+
+```powershell
+powershell.exe -NoProfile -File .\install_daily_ui.ps1 -Check
+```
+
+It lists missing adjacent Core/Lab code, the repaired worker/runtime, or the
+on-demand interactive launcher task before changing a shortcut or task. Passing
+this presence check does not replace the launcher's binary integrity checks or
+prove that a GFN session is available. The diagnostic `launch_run.ps1` and
+`remote_desktop.ps1` derive their script paths from their deployment directory;
+the adjacent dependencies and scheduled tasks are still required.
+
 Windows deployment: `C:\Users\jamie\dev\gfn-codex-live-20260921`.
 These helpers use a minimally repaired HUD Guard and the existing Lab controller.
 They do not replace Core/Lab binaries or promote a production default.
@@ -40,6 +54,11 @@ the custom mask and enables it; saving an empty profile disables the mask.
 The original Cyberpunk 2077 1440p preset remains a separate read-only option.
 The panel reports saved-region count and profile readiness. Enabling an empty
 or invalid mask disables Start; leaving the mask off still permits NR.
+If the selected game window changes identity or size while the panel is open,
+refresh and select it again. Daily launch binds the selected PID, creation
+identity, title, and geometry; it cannot silently follow a reused HWND. An
+active HUD-mask run stops if the game geometry changes, so the old rectangle
+profile cannot be applied to a different size.
 
 Select a rectangle to edit `x0`, `y0`, `x1`, and `y1` in source pixels, then use
 **Apply selected**. The lower-right edges are exclusive. This permits single-pixel
@@ -278,11 +297,20 @@ mapping from safe region names to `[left, top, right, bottom]` pixel coordinates
 The helper rejects empty captures and non-paired metadata. Output is written
 inside the run's `hud-comparison` directory; color subsets are measurement
 proxies, not automatic HUD detection or perceptual-quality scores.
+Use the existing overlay Python environment for NumPy and Pillow. Add
+`--all-frames` to render each of the three same-frame source / NR / Guard PNGs
+under `hud-comparison/frames/`. The tool rejects reused capture identities,
+changed HWND/geometry, and incomplete frame files before writing review output.
+Keep rendered game images and metrics under the ignored local `runs/` directory.
 
 Nine mainline G2/Fast/NR720 samples across gameplay, startup prompt, and main
 menu show visible HUD tone/contrast changes without a mask, but no severe
 legibility failure in the inspected text/icons. Protected gameplay regions
 remain exact. Main-menu text is outside the fixed mask and is not protected.
+Reviewing the first gameplay, menu, and caption pairs found visible rectangular
+tone boundaries from the fixed Cyberpunk mask. The three inspected gameplay
+frames are nearly static, so they cannot establish moving-edge or ghosting
+quality.
 This limited sample is not a multi-game or long-sequence guarantee. NR-only is
 the mask-free default; no adaptive HUD mode is deployed. Manual custom masks
 are optional. A source session that ended due to

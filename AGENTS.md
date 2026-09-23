@@ -56,6 +56,11 @@ The panel and UI-probe scheduled tasks are on-demand only, with no autostart.
 The app display name is `Geforce NR`, with `Geforce NR — HUD Mask Editor` and
 `Geforce NR — Output` for its auxiliary windows. Desktop/task name migration
 preserves the original Core/Lab paths and internal singleton identifiers.
+The daily panel rechecks selected PID, process creation identity, title, and
+geometry before launch; the child verifies the same contract. A resized game
+stops an active masked run rather than reusing its old rectangle geometry.
+`install_daily_ui.ps1 -Check` is a read-only layout/task presence preflight;
+runtime integrity is still checked by the launcher.
 
 HUD-impact comparison uses same-command-list source/pre-HUD/post-HUD readbacks,
 not separate-time screenshots. Nine current G2/NR720 samples show tone/contrast
@@ -64,6 +69,11 @@ game or long-motion sequence. Color-selected ROI metrics include possible
 background and are not a HUD detector or damage percentage. No adaptive mode
 is deployed. The user selected mask-free NR as the daily default, with manual
 mask selection available when desired.
+The fixed Cyberpunk mask can expose visible rectangular tone boundaries and
+leave menu/caption text outside its protected regions. Three inspected gameplay
+frames are nearly static and do not establish moving-edge or ghosting quality.
+`compare_hud_pairs.py --all-frames` renders all three same-frame variants per
+capture under ignored run output after identity and geometry checks.
 
 `mask_editor.py` captures an in-memory, visible-window SDR preview only while
 renderers are stopped. Integer subsampling uses exact source-pixel coordinates.

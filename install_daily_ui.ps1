@@ -1,8 +1,35 @@
+param([switch]$Check)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$python = Join-Path (Split-Path $root -Parent) 'gfn-nr-core\.venv\Scripts\pythonw.exe'
+$parent = Split-Path $root -Parent
+$python = Join-Path $parent 'gfn-nr-core\.venv\Scripts\pythonw.exe'
 $script = Join-Path $root 'daily_ui.py'
-if (!(Test-Path $python) -or !(Test-Path $script)) { throw 'Daily UI deployment is incomplete' }
+$requirements = [ordered]@{
+    'Daily UI' = $script
+    'Daily backend' = (Join-Path $root 'daily_backend.py')
+    'Daily launcher' = (Join-Path $root 'live_run.py')
+    'Mask editor' = (Join-Path $root 'mask_editor.py')
+    'Mask profiles' = (Join-Path $root 'mask_profiles.py')
+    'Core Python runtime' = $python
+    'Lab Windows adapter' = (Join-Path $parent 'gfn-nvofa-lab-20260920\gfn_core\windows.py')
+    'Lab controller' = (Join-Path $parent 'gfn-nvofa-lab-20260920\gfn_core\engine.py')
+    'Lab appearance' = (Join-Path $parent 'gfn-nvofa-lab-20260920\appearance.json')
+    'HUD launcher dependency' = (Join-Path $parent 'gfn-hud-live-20260921-7b03\live_hud.py')
+    'Repaired native worker' = (Join-Path $root 'native-repaired\nvngx.dll')
+    'NR runtime' = (Join-Path $root 'native-repaired\nvngx_dlssnr.dll')
+    'Repaired build record' = (Join-Path $root 'repaired-build.json')
+}
+$missing = @($requirements.GetEnumerator() | Where-Object { !(Test-Path -LiteralPath $_.Value -PathType Leaf) })
+if ($missing.Count) {
+    foreach ($item in $missing) { Write-Output ('Missing ' + $item.Key + ': ' + $item.Value) }
+    throw 'Daily UI layout is incomplete; no desktop shortcut or scheduled task was changed'
+}
+$launcherTask = Get-ScheduledTask 'GFN-Codex-Live-Run-20260921' -ErrorAction SilentlyContinue
+if (!$launcherTask) { throw 'The on-demand interactive launcher task is missing; no desktop shortcut or scheduled task was changed' }
+if ($Check) {
+    Write-Output 'Daily UI layout and on-demand launcher task are present. No changes were made.'
+    return
+}
 $desktop = [Environment]::GetFolderPath('Desktop')
 $linkPath = Join-Path $desktop 'Geforce NR.lnk'
 $shell = New-Object -ComObject WScript.Shell
@@ -32,7 +59,7 @@ $old = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($old -and ($old.State -eq 'Running' -or $old.Actions.Arguments -ne ('"' + $script + '"'))) {
     throw 'Existing panel task is active or unrelated; preserved'
 }
-$principal = (Get-ScheduledTask 'GFN-Codex-Live-Run-20260921').Principal
+$principal = $launcherTask.Principal
 $action = New-ScheduledTaskAction -Execute $python -Argument ('"' + $script + '"') -WorkingDirectory $root
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null

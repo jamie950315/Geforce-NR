@@ -37,6 +37,14 @@ class DailyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'selected game changed'):
             c._current_target(target)
 
+    def test_changed_game_size_requires_refresh(self):
+        c = DailyController.__new__(DailyController)
+        target = dict(hwnd=1, pid=2, created=3, title='Game A', width=2560, height=1440)
+        c.list_targets = lambda: [dict(target, width=1920, height=1080)]
+        c.win = SimpleNamespace(u=SimpleNamespace(IsIconic=lambda hwnd: False))
+        with self.assertRaisesRegex(RuntimeError, 'game size changed'):
+            c._current_target(target)
+
     def test_optional_mask_migration_preserves_processing(self):
         old = dict(DEFAULTS, mode='guard', nr_height=900)
         old.pop('mask_profile')

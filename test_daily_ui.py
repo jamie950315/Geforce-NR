@@ -12,6 +12,9 @@ class Variable:
     def set(self, value):
         self.value = value
 
+    def get(self):
+        return self.value
+
 
 class CloseRecoveryTests(unittest.TestCase):
     def test_window_fit_includes_title_bar_and_work_area_origin(self):
@@ -44,6 +47,23 @@ class CloseRecoveryTests(unittest.TestCase):
         self.assertIn('panel remains open', app.status_detail_var.value)
         self.assertFalse(destroyed)
         self.assertEqual(len(scheduled), 1)
+
+    def test_refresh_does_not_select_reused_game_window(self):
+        old = dict(hwnd=5, pid=7, created=10, title='Game A', width=2560, height=1440)
+        for replacement in (dict(old, pid=8, created=11, title='Game B'),
+                            dict(old, title='Game B'), dict(old, width=1920, height=1080)):
+            with self.subTest(replacement=replacement):
+                app = DailyApp.__new__(DailyApp)
+                app.target_var = Variable()
+                app.target_var.set('old')
+                app.target_by_display = {'old': old}
+                app.target_combo = SimpleNamespace(configure=lambda **kwargs: None)
+                app.status_detail_var = Variable()
+                app.controller = SimpleNamespace(list_targets=lambda: [replacement], busy=False)
+                app._refresh_mask_status = lambda: None
+                app.refresh_targets()
+                self.assertEqual(app.target_var.value, '')
+                self.assertIn('selected game changed', app.status_detail_var.value)
 
 
 if __name__ == '__main__':

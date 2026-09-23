@@ -495,10 +495,11 @@ class DailyApp:
             self.root.deiconify()
 
     def refresh_targets(self) -> None:
-        previous_hwnd = None
+        previous_identity = None
         selected = self.target_by_display.get(self.target_var.get())
         if selected:
-            previous_hwnd = selected.get("hwnd")
+            previous_identity = tuple(selected.get(key) for key in
+                                      ("hwnd", "pid", "created", "title", "width", "height"))
         try:
             self.targets = list(self.controller.list_targets())
         except Exception as exc:
@@ -520,7 +521,8 @@ class DailyApp:
                 label = f"{label}  ·  HWND {hwnd}"
             self.target_by_display[label] = target
             labels.append(label)
-            if previous_hwnd is not None and hwnd == previous_hwnd:
+            if previous_identity == tuple(target.get(key) for key in
+                                          ("hwnd", "pid", "created", "title", "width", "height")):
                 selected_label = label
 
         self.target_combo.configure(values=labels)
@@ -530,6 +532,10 @@ class DailyApp:
                 self.status_detail_var.set("No eligible game window found. Open the GeForce NOW game, then refresh.")
         elif selected_label:
             self.target_var.set(selected_label)
+        elif previous_identity is not None:
+            self.target_var.set("")
+            if not self.controller.busy:
+                self.status_detail_var.set("The selected game changed or closed. Choose a game window before starting.")
         else:
             self.target_var.set(labels[0])
         self._refresh_mask_status()

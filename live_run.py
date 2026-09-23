@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import traceback
+from mask_profiles import validate_mask
 
 ROOT = Path(__file__).resolve().parent
 LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
@@ -18,6 +19,7 @@ from gfn_core.windows import Win32
 
 class RecordedEngine(Engine):
     owner = None
+    mask_geometry = None
 
     def _visibility(self):
         if self.owner and self.win.identity(self.owner[0])[1] != self.owner[1]:
@@ -47,7 +49,11 @@ class RecordedEngine(Engine):
         super()._command(action, data)
 
     def _configure(self):
+        if self.mask_geometry and self.win.rect(self.target.hwnd)[2:] != self.mask_geometry:
+            raise RuntimeError('Game size changed while a HUD mask was active; stop and select a matching profile')
         super()._configure()
+        if self.mask_geometry and tuple(self.full) != self.mask_geometry:
+            raise RuntimeError('WGC geometry does not match the active HUD mask')
         if self.owner:
             for hwnd in self.win.worker_windows(self.transport.process.pid):
                 title = ctypes.create_unicode_buffer(256)
@@ -80,11 +86,19 @@ def main():
     ap.add_argument('--owner-pid', type=int)
     ap.add_argument('--owner-created', type=int)
     ap.add_argument('--owner-token')
+    ap.add_argument('--target-pid', type=int)
+    ap.add_argument('--target-created', type=int)
+    ap.add_argument('--target-title')
+    ap.add_argument('--target-width', type=int)
+    ap.add_argument('--target-height', type=int)
     a = ap.parse_args()
     if not a.name.replace('-', '').isalnum() or not (5 <= a.seconds <= 600 or (a.daily and a.seconds == 0)):
         raise ValueError('Invalid run name or duration')
     if a.daily and (not a.owner_pid or not a.owner_created or not a.owner_token or len(a.owner_token) != 32 or any(c not in '0123456789abcdef' for c in a.owner_token) or a.live_pair_worker or a.probe_worker or a.fixed_worker or a.original_worker):
         raise ValueError('Daily mode requires an owning UI and the mainline worker')
+    if a.daily and (not a.target_pid or not a.target_created or not a.target_title
+                    or not a.target_width or not a.target_height):
+        raise ValueError('Daily mode requires the selected game identity and geometry')
     if (a.mode == 'guard') != bool(a.mask):
         raise ValueError('Only guard mode requires a mask')
     if a.live_pair_worker and (a.mode != 'guard' or a.seconds > 30):
@@ -115,6 +129,16 @@ def main():
     if len(targets) != 1 or win.u.IsIconic(a.hwnd):
         raise RuntimeError('Explicit game target is unavailable')
     target = targets[0]
+    if a.daily:
+        actual = target.to_dict()
+        if ((actual['pid'], actual['created'], actual['title']) !=
+                (a.target_pid, a.target_created, a.target_title)
+                or win.rect(target.hwnd)[2:] != (a.target_width, a.target_height)):
+            raise RuntimeError('Selected game identity or size changed before launch; refresh the panel')
+    mask_geometry = None
+    if a.mask:
+        mask_geometry = tuple(win.rect(target.hwnd)[2:])
+        validate_mask(a.mask, *mask_geometry)
     run = ROOT / 'runs' / a.name
     run.mkdir(parents=True, exist_ok=False)
     os.environ.pop('GFN_LIVE_PAIR_DIR', None)
@@ -152,6 +176,7 @@ def main():
             engine = RecordedEngine(run, target, settings, win)
             if a.daily:
                 engine.owner = (a.owner_pid, a.owner_created)
+            engine.mask_geometry = mask_geometry
             engine.native = native
             engine.sampler.interval = a.gpu_sample_interval
             rc = engine.run()
