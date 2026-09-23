@@ -84,6 +84,13 @@ frames are nearly static and do not establish moving-edge or ghosting quality.
 A newer three-pair Cyberpunk sample includes NPC movement and passes protected/
 outside error 0 and feather error at most 1/255; sparse pairs still do not
 establish temporal ghosting quality.
+A separate three-second, 85-frame composed-output diagnostic with unmasked
+NR720/flow1280/G2/Fast shows no severe ghost trails in inspected NPC-motion
+frames; it is lossy, source-unpaired, and unsuitable for timing acceptance or
+broad perceptual claims. Keep this game video only in ignored local run output.
+GDI window capture of the GFN and NR output HWNDs returned black; desktop
+composition capture can include unrelated apps unless GFN is verified full-screen
+and foreground before and after the bounded capture.
 `compare_hud_pairs.py --all-frames` renders all three same-frame variants per
 capture under ignored run output after identity and geometry checks.
 

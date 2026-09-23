@@ -324,6 +324,11 @@ Its same-frame pixel validation passes: protected and outside-mask maximum
 errors are 0, and feather error is at most 1/255. The reviewed stills do not
 show severe HUD legibility loss, but the fixed mask tone boundary remains
 visible. Three sparse frames cannot establish temporal ghosting quality.
+An additional three-second, 85-frame composed-output diagnostic at 2560x1440
+shows NPC motion with unmasked NR720 / flow1280 / G2 / Fast. The inspected
+consecutive frames show no severe ghost trails or HUD legibility failure.
+This is one lossy, source-unpaired scene capture; recording overhead and sparse
+inspection prevent timing or general perceptual-quality claims.
 This limited sample is not a multi-game or long-sequence guarantee. NR-only is
 the mask-free default; no adaptive HUD mode is deployed. Manual custom masks
 are optional. A source session that ended due to
