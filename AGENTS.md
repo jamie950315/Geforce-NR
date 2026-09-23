@@ -62,6 +62,9 @@ stops any active daily run; diagnostic CLI runs retain their resize behavior.
 One observed Cyberpunk exit kept the GFN HWND/title but changed geometry from
 2560x1440 to 2578x1398 and showed Steam, so HWND identity alone does not mark
 the end of a game session. A size change in daily mode now fails closed.
+An actual selected-window close ends daily NR with `target_closed`/exit 0 and
+no active controller. The panel clears stale target selections after either
+`target_closed` or `target_resized` and requires a refresh before Start.
 `install_daily_ui.ps1 -Check` is a read-only layout/task presence preflight;
 runtime integrity is still checked by the launcher.
 `remote_desktop.ps1` restores its neutral on-demand probe action after success

@@ -113,6 +113,22 @@ class DailyTests(unittest.TestCase):
             c._send_stop()
             self.assertFalse(c.stop_sent)
 
+    def test_closed_target_reports_refresh_reason(self):
+        with tempfile.TemporaryDirectory() as folder:
+            c = DailyController.__new__(DailyController)
+            c.run = Path(folder)/'runs'/'owned'
+            (c.run/'logs').mkdir(parents=True)
+            atomic_json(c.run/'outcome.json', dict(exit_code=0, state='target_closed'))
+            c.process = SimpleNamespace(poll=lambda: 0, returncode=0)
+            c.metrics = {}
+            c.launch_log = None
+            c.state = 'running'
+            c.detail = 'Processing'
+            snapshot = c.poll()
+            self.assertEqual(snapshot['state'], 'stopped')
+            self.assertEqual(snapshot['end_reason'], 'target_closed')
+            self.assertIn('Open a game and refresh', snapshot['detail'])
+
 
 if __name__ == '__main__':
     unittest.main()

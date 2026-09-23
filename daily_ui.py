@@ -589,6 +589,7 @@ class DailyApp:
 
     def _poll_controller(self) -> None:
         try:
+            previous_state = self._last_state
             snapshot = self.controller.poll()
             self._set_status(
                 state=str(snapshot.get("state", "error")),
@@ -598,6 +599,14 @@ class DailyApp:
                 hardware_flow_active=bool(snapshot.get("hardware_flow_active", False)),
                 run=snapshot.get("run"),
             )
+            if (previous_state in {"starting", "running", "suspended", "stopping"}
+                    and snapshot.get("state") == "stopped"
+                    and snapshot.get("end_reason") in {"target_closed", "target_resized"}):
+                self.targets = []
+                self.target_by_display.clear()
+                self.target_combo.configure(values=[])
+                self.target_var.set("")
+                self._refresh_mask_status()
         except Exception as exc:
             _write_error_log("Failed while polling the daily pipeline")
             self._last_state = "error"

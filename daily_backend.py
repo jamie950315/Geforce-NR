@@ -243,6 +243,7 @@ class DailyController:
         self.stop_sent = True
 
     def poll(self):
+        end_reason = None
         if self.process:
             if self.run.exists():
                 files = list((self.run/'logs').glob('*.metrics.json'))
@@ -259,11 +260,13 @@ class DailyController:
             else:
                 outcome = self.run/'outcome.json'
                 result = read_json(outcome) if outcome.exists() else {}
+                end_reason = result.get('state')
                 if self.process.returncode == 0 and result.get('exit_code') == 0:
                     self.state = 'stopped'
-                    self.detail = ('Game window size changed. Refresh the game list before starting again.'
-                        if result.get('state') == 'target_resized'
-                        else 'Session ended: ' + result.get('state', 'stopped'))
+                    self.detail = {
+                        'target_resized': 'Game window size changed. Refresh the game list before starting again.',
+                        'target_closed': 'The selected GFN window closed. Open a game and refresh the game list.',
+                    }.get(end_reason, 'Session ended: ' + result.get('state', 'stopped'))
                 else:
                     warnings = self.metrics.get('warnings', [])
                     detail = '; '.join(warnings[-3:])
@@ -281,6 +284,7 @@ class DailyController:
         geometry = 'NR: ' + shape(self.metrics.get('processing_size')) + '   Flow: ' + shape(self.metrics.get('flow_input_size')) + '   Output: ' + shape(self.metrics.get('output_size'))
         processing = self.busy and not self.metrics.get('suspended') and not self.metrics.get('settings', {}).get('bypass')
         evidence = self.run if self.run and self.run.exists() else (self.launch_log.parent if self.launch_log and self.launch_log.exists() else None)
-        return dict(state=self.state, detail=self.detail, run=str(evidence) if evidence else None,
+        return dict(state=self.state, detail=self.detail, end_reason=end_reason,
+                    run=str(evidence) if evidence else None,
                     geometry=geometry, nr_confirmed=bool(processing and self.metrics.get('nr_confirmed')),
                     hardware_flow_active=bool(processing and self.metrics.get('hardware_flow_active')))

@@ -65,6 +65,32 @@ class CloseRecoveryTests(unittest.TestCase):
                 self.assertEqual(app.target_var.value, '')
                 self.assertIn('selected game changed', app.status_detail_var.value)
 
+    def test_target_close_clears_stale_selection_once(self):
+        app = DailyApp.__new__(DailyApp)
+        app._last_state = 'running'
+        app._closing = False
+        app.targets = [dict(hwnd=5)]
+        app.target_by_display = {'old': dict(hwnd=5)}
+        app.target_var = Variable()
+        app.target_var.set('old')
+        combo_updates, mask_refreshes, polls = [], [], []
+        app.target_combo = SimpleNamespace(configure=lambda **kwargs: combo_updates.append(kwargs))
+        app.controller = SimpleNamespace(poll=lambda: dict(state='stopped',
+            detail='The selected GFN window closed.', end_reason='target_closed'))
+        app._set_status = lambda **kwargs: setattr(app, '_last_state', kwargs['state'])
+        app._refresh_mask_status = lambda: mask_refreshes.append(True)
+        app._controller_busy = lambda: False
+        app.root = SimpleNamespace(after=lambda *args: polls.append(args))
+        app._poll_controller()
+        self.assertEqual(app.target_var.get(), '')
+        self.assertEqual(app.target_by_display, {})
+        self.assertEqual(combo_updates, [dict(values=[])])
+        self.assertEqual(len(mask_refreshes), 1)
+        app.target_var.set('new')
+        app._poll_controller()
+        self.assertEqual(app.target_var.get(), 'new')
+        self.assertEqual(len(mask_refreshes), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

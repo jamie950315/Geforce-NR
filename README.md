@@ -65,6 +65,8 @@ is off. Refresh and select the new size before restarting. Diagnostic CLI runs
 retain their separate resize behavior. In one observed Cyberpunk exit, the GFN
 window kept its identity while changing from 2560x1440 to 2578x1398 and
 showing Steam; this size check prevents daily NR from continuing on that page.
+When a daily run ends because the selected GFN window closes or changes size,
+the panel clears the stale selection and requires **Refresh** before Start.
 
 Select a rectangle to edit `x0`, `y0`, `x1`, and `y1` in source pixels, then use
 **Apply selected**. The lower-right edges are exclusive. This permits single-pixel
