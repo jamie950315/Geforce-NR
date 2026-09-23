@@ -260,7 +260,10 @@ class DailyController:
                 outcome = self.run/'outcome.json'
                 result = read_json(outcome) if outcome.exists() else {}
                 if self.process.returncode == 0 and result.get('exit_code') == 0:
-                    self.state, self.detail = 'stopped', 'Session ended: ' + result.get('state', 'stopped')
+                    self.state = 'stopped'
+                    self.detail = ('Game window size changed. Refresh the game list before starting again.'
+                        if result.get('state') == 'target_resized'
+                        else 'Session ended: ' + result.get('state', 'stopped'))
                 else:
                     warnings = self.metrics.get('warnings', [])
                     detail = '; '.join(warnings[-3:])

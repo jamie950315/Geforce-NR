@@ -30,6 +30,9 @@ this presence check does not replace the launcher's binary integrity checks or
 prove that a GFN session is available. The diagnostic `launch_run.ps1` and
 `remote_desktop.ps1` derive their script paths from their deployment directory;
 the adjacent dependencies and scheduled tasks are still required.
+The desktop probe restores its neutral on-demand task action even when a probe
+fails, and prints only GFN-related window metadata. Full screenshots and the
+local window inventory remain ignored diagnostic output.
 
 Windows deployment: `C:\Users\jamie\dev\gfn-codex-live-20260921`.
 These helpers use a minimally repaired HUD Guard and the existing Lab controller.
@@ -57,8 +60,11 @@ or invalid mask disables Start; leaving the mask off still permits NR.
 If the selected game window changes identity or size while the panel is open,
 refresh and select it again. Daily launch binds the selected PID, creation
 identity, title, and geometry; it cannot silently follow a reused HWND. An
-active HUD-mask run stops if the game geometry changes, so the old rectangle
-profile cannot be applied to a different size.
+active daily run stops if the game geometry changes, including when HUD Mask
+is off. Refresh and select the new size before restarting. Diagnostic CLI runs
+retain their separate resize behavior. In one observed Cyberpunk exit, the GFN
+window kept its identity while changing from 2560x1440 to 2578x1398 and
+showing Steam; this size check prevents daily NR from continuing on that page.
 
 Select a rectangle to edit `x0`, `y0`, `x1`, and `y1` in source pixels, then use
 **Apply selected**. The lower-right edges are exclusive. This permits single-pixel
@@ -311,6 +317,11 @@ Reviewing the first gameplay, menu, and caption pairs found visible rectangular
 tone boundaries from the fixed Cyberpunk mask. The three inspected gameplay
 frames are nearly static, so they cannot establish moving-edge or ghosting
 quality.
+A later three-pair Cyberpunk gameplay sample includes visible NPC movement.
+Its same-frame pixel validation passes: protected and outside-mask maximum
+errors are 0, and feather error is at most 1/255. The reviewed stills do not
+show severe HUD legibility loss, but the fixed mask tone boundary remains
+visible. Three sparse frames cannot establish temporal ghosting quality.
 This limited sample is not a multi-game or long-sequence guarantee. NR-only is
 the mask-free default; no adaptive HUD mode is deployed. Manual custom masks
 are optional. A source session that ended due to

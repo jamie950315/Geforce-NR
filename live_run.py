@@ -20,10 +20,16 @@ from gfn_core.windows import Win32
 class RecordedEngine(Engine):
     owner = None
     mask_geometry = None
+    daily_geometry = None
 
     def _visibility(self):
         if self.owner and self.win.identity(self.owner[0])[1] != self.owner[1]:
             self.reason = 'owner_closed'
+            self.stop.set()
+            return True
+        if (self.daily_geometry and not self.win.u.IsIconic(self.target.hwnd)
+                and self.win.rect(self.target.hwnd)[2:] != self.daily_geometry):
+            self.reason = 'target_resized'
             self.stop.set()
             return True
         previous = self.suspended
@@ -176,6 +182,7 @@ def main():
             engine = RecordedEngine(run, target, settings, win)
             if a.daily:
                 engine.owner = (a.owner_pid, a.owner_created)
+                engine.daily_geometry = (a.target_width, a.target_height)
             engine.mask_geometry = mask_geometry
             engine.native = native
             engine.sampler.interval = a.gpu_sample_interval

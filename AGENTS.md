@@ -58,9 +58,15 @@ The app display name is `Geforce NR`, with `Geforce NR — HUD Mask Editor` and
 preserves the original Core/Lab paths and internal singleton identifiers.
 The daily panel rechecks selected PID, process creation identity, title, and
 geometry before launch; the child verifies the same contract. A resized game
-stops an active masked run rather than reusing its old rectangle geometry.
+stops any active daily run; diagnostic CLI runs retain their resize behavior.
+One observed Cyberpunk exit kept the GFN HWND/title but changed geometry from
+2560x1440 to 2578x1398 and showed Steam, so HWND identity alone does not mark
+the end of a game session. A size change in daily mode now fails closed.
 `install_daily_ui.ps1 -Check` is a read-only layout/task presence preflight;
 runtime integrity is still checked by the launcher.
+`remote_desktop.ps1` restores its neutral on-demand probe action after success
+or failure and limits console output to GFN-related window metadata; full
+screenshots and window inventory remain ignored local diagnostics.
 
 HUD-impact comparison uses same-command-list source/pre-HUD/post-HUD readbacks,
 not separate-time screenshots. Nine current G2/NR720 samples show tone/contrast
@@ -72,6 +78,9 @@ mask selection available when desired.
 The fixed Cyberpunk mask can expose visible rectangular tone boundaries and
 leave menu/caption text outside its protected regions. Three inspected gameplay
 frames are nearly static and do not establish moving-edge or ghosting quality.
+A newer three-pair Cyberpunk sample includes NPC movement and passes protected/
+outside error 0 and feather error at most 1/255; sparse pairs still do not
+establish temporal ghosting quality.
 `compare_hud_pairs.py --all-frames` renders all three same-frame variants per
 capture under ignored run output after identity and geometry checks.
 
