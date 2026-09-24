@@ -10,6 +10,7 @@ $requirements = [ordered]@{
     'Daily launcher' = (Join-Path $root 'live_run.py')
     'Mask editor' = (Join-Path $root 'mask_editor.py')
     'Mask profiles' = (Join-Path $root 'mask_profiles.py')
+    'Window preview' = (Join-Path $root 'window_preview.py')
     'Core Python runtime' = $python
     'Lab Windows adapter' = (Join-Path $parent 'gfn-nvofa-lab-20260920\gfn_core\windows.py')
     'Lab controller' = (Join-Path $parent 'gfn-nvofa-lab-20260920\gfn_core\engine.py')
