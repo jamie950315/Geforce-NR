@@ -21,6 +21,8 @@ Native runs require Windows interactive session 1. SSH session 0 has a different
 display/adapter view and fails NGX initialization on this host. Use the on-demand
 interactive scheduled launcher. The isolated launcher defaults to `native-repaired`
 with the timestamp-contract fix; original Core/Lab/Guard binaries remain intact.
+The on-demand diagnostic launcher restores its saved scheduled action to an
+inert Python command after dispatch; the running task continues unchanged.
 Arrival gaps and GFN stream loss still fail throughput gates; do not claim a
 completed 120 FPS soak. Never treat the GFN VPN label as proof of exit-node routing.
 The 25 Mbps experiment is restored to 100 Mbps. See README.md for measured limits.

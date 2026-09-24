@@ -176,6 +176,9 @@ Run in the existing Windows interactive desktop, not an SSH session's noninterac
 desktop. The `GFN-Codex-Live-Run-20260921` scheduled task has no trigger; it is an
 on-demand interactive launcher. Remote batch commands use `ctps` with
 `-o RemoteCommand=none -o RequestTTY=no`.
+`launch_run.ps1` restores the task's stored action to an inert Python command
+after dispatch, without interrupting the current run. Its dispatch message is
+not evidence of a successful run; inspect the run outcome.
 
 Enumerate current game HWNDs from the interactive desktop:
 
