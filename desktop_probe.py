@@ -39,7 +39,17 @@ if args.focus_gfn:
     if len(targets) == 1:
         try:
             win32gui.ShowWindow(targets[0]['hwnd'], win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(targets[0]['hwnd'])
+            source_thread = win32api.GetCurrentThreadId()
+            foreground_thread = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())[0]
+            attached = ctypes.windll.user32.AttachThreadInput(source_thread, foreground_thread, True)
+            try:
+                win32gui.BringWindowToTop(targets[0]['hwnd'])
+                win32gui.SetForegroundWindow(targets[0]['hwnd'])
+            finally:
+                if attached:
+                    ctypes.windll.user32.AttachThreadInput(source_thread, foreground_thread, False)
+            if win32gui.GetForegroundWindow() != targets[0]['hwnd']:
+                result['focus_error'] = 'Windows did not activate the GFN window'
         except Exception as exc:
             result['focus_error'] = str(exc)
         time.sleep(1)
