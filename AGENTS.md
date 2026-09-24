@@ -96,9 +96,17 @@ A separate three-second, 85-frame composed-output diagnostic with unmasked
 NR720/flow1280/G2/Fast shows no severe ghost trails in inspected NPC-motion
 frames; it is lossy, source-unpaired, and unsuitable for timing acceptance or
 broad perceptual claims. Keep this game video only in ignored local run output.
+Two PC Building Simulator 2 NR-only runs (20 and 30 seconds) confirm NR,
+hardware flow, and 2560x1440 WGC/output with 1280x720 processing, but have
+only about 59 host exchanges/s. The session preflight reported 9.7% packet loss
+and 93 ms latency. A separate three-second, 79-frame camera-motion composition
+clip has visible blockiness whose source is unresolved; keep it in ignored run
+output and do not use it for timing or general image-quality acceptance.
 GDI window capture of the GFN and NR output HWNDs returned black; desktop
 composition capture can include unrelated apps unless GFN is verified full-screen
 and foreground before and after the bounded capture.
+`capture_game.py` also requires a GFN executable and a full-screen game window
+before recording each raw desktop sample.
 `compare_hud_pairs.py --all-frames` renders all three same-frame variants per
 capture under ignored run output only after a passing `live-pair-result.json`;
 the validator binds the complete run manifest hash, and comparison checks the

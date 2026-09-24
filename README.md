@@ -339,6 +339,15 @@ shows NPC motion with unmasked NR720 / flow1280 / G2 / Fast. The inspected
 consecutive frames show no severe ghost trails or HUD legibility failure.
 This is one lossy, source-unpaired scene capture; recording overhead and sparse
 inspection prevent timing or general perceptual-quality claims.
+In a separate PC Building Simulator 2 session, 20- and 30-second NR-only runs
+both ended normally with confirmed NR and hardware optical flow. WGC was
+2560x1440, NR and flow were 1280x720, and output was 2560x1440; host exchange
+rates were 58.77 and 58.58/s. The GFN preflight for this session measured more
+than 100 Mbps, 9.7% packet loss, and 93 ms latency. A bounded three-second,
+79-frame desktop-composition recording during camera motion shows visible
+blockiness in inspected frames. It is lossy and not paired to source frames,
+so the blockiness cannot be assigned to NR, the stream, or the recorder. Keep
+the recording in ignored local run output; these runs do not qualify 120 FPS.
 This limited sample is not a multi-game or long-sequence guarantee. NR-only is
 the mask-free default; no adaptive HUD mode is deployed. Manual custom masks
 are optional. A source session that ended due to
