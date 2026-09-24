@@ -70,9 +70,10 @@ no active controller. The panel clears stale target selections after either
 `install_daily_ui.ps1 -Check` is a read-only layout/task presence preflight;
 runtime integrity is still checked by the launcher.
 `remote_desktop.ps1` restores its neutral on-demand probe action after success
-or failure. `desktop_probe.py` records only GFN-related window metadata and
-captures a fresh screenshot only with a foreground GFN window covering the
-screen; check `screenshot_captured` before using the ignored `desktop.png`.
+or failure. `desktop_probe.py` binds GFN metadata, input, and screenshots to a
+GFN executable and captures a fresh screenshot only with a foreground GFN
+window covering the screen; check `screenshot_captured` before using the ignored
+`desktop.png`.
 `probe_daily_ui.ps1` also restores its neutral on-demand action after either
 result; a failed probe must not leave a prior click or key as the saved action.
 

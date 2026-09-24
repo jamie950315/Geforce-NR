@@ -1,5 +1,6 @@
 """Capture bounded interactive-session evidence without changing game state."""
 import ctypes
+from ctypes import wintypes
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,32 @@ import win32process
 from PIL import ImageGrab
 
 ROOT = Path(__file__).resolve().parent
+GFN_EXECUTABLES = {'geforcenow.exe', 'geforcenowcontainer.exe', 'geforcenowstreamer.exe'}
+kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                                wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.CloseHandle.restype = wintypes.BOOL
+
+
+def is_gfn_window(hwnd):
+    pid = win32process.GetWindowThreadProcessId(hwnd)[1]
+    handle = kernel32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return False
+    try:
+        path = ctypes.create_unicode_buffer(32768)
+        length = wintypes.DWORD(len(path))
+        if not kernel32.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(length)):
+            return False
+        return Path(path.value).name.lower() in GFN_EXECUTABLES
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 ap = argparse.ArgumentParser()
 ap.add_argument('--focus-gfn', action='store_true')
 ap.add_argument('--click', nargs=2, type=int)
@@ -26,7 +53,7 @@ rows = []
 def visit(hwnd, _):
     title = win32gui.GetWindowText(hwnd)
     if (win32gui.IsWindowVisible(hwnd)
-            and ('GeForce NOW' in title or title.startswith('Geforce NR'))):
+            and ((title and is_gfn_window(hwnd)) or title.startswith('Geforce NR'))):
         rows.append(dict(hwnd=hwnd, title=title, rect=win32gui.GetWindowRect(hwnd),
                          pid=win32process.GetWindowThreadProcessId(hwnd)[1]))
 
@@ -34,7 +61,7 @@ def visit(hwnd, _):
 win32gui.EnumWindows(visit, None)
 result = dict(pid=os.getpid(), windows=rows)
 if args.focus_gfn:
-    targets = [r for r in rows if r['title'] == 'GeForce NOW']
+    targets = [r for r in rows if r['title'] == 'GeForce NOW' and is_gfn_window(r['hwnd'])]
     if len(targets) == 1:
         try:
             win32gui.ShowWindow(targets[0]['hwnd'], win32con.SW_RESTORE)
@@ -44,8 +71,7 @@ if args.focus_gfn:
         time.sleep(1)
 if args.click or args.key:
     foreground = win32gui.GetForegroundWindow()
-    title = win32gui.GetWindowText(foreground)
-    if 'GeForce NOW' not in title:
+    if not is_gfn_window(foreground):
         raise RuntimeError('Refusing click outside the observed GFN window')
     if args.click:
         win32api.SetCursorPos(tuple(args.click))
@@ -65,13 +91,14 @@ if args.click or args.key:
     time.sleep(2)
 result['foreground'] = win32gui.GetForegroundWindow()
 foreground_title = win32gui.GetWindowText(result['foreground'])
-result['foreground_title'] = (foreground_title if 'GeForce NOW' in foreground_title
+result['foreground_is_gfn'] = is_gfn_window(result['foreground'])
+result['foreground_title'] = (foreground_title if result['foreground_is_gfn']
                               or foreground_title.startswith('Geforce NR') else None)
 result['screenshot_captured'] = False
 screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
 screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
 left, top, right, bottom = win32gui.GetWindowRect(result['foreground'])
-if ('GeForce NOW' in foreground_title and left <= 0 and top <= 0
+if (result['foreground_is_gfn'] and left <= 0 and top <= 0
         and right >= screen_width and bottom >= screen_height - 80):
     try:
         im = ImageGrab.grab(bbox=(0, 0, screen_width, screen_height))

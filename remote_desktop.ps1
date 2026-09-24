@@ -33,7 +33,7 @@ try {
     } else { $null }
     [pscustomobject]@{
         foreground_title = $foregroundTitle
-        foreground_is_gfn = [bool]($result.foreground_title -match 'GeForce NOW')
+        foreground_is_gfn = [bool]$result.foreground_is_gfn
         screenshot_captured = [bool]$result.screenshot_captured
         screenshot_size = $result.screenshot_size
         windows = $windows
