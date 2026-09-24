@@ -41,6 +41,16 @@ daily-probe.png
 *.pcap
 *.pcapng
 *.rgba
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.gif
+*.tif
+*.tiff
+*.ppm
+*.pgm
 *.mp4
 *.mkv
 *.mov
