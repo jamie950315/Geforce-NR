@@ -45,6 +45,47 @@ def capture_metadata(pairs):
     return captures
 
 
+def verify_validation(run, captures, manifest):
+    if (manifest.get('mode') != 'guard' or not isinstance(manifest.get('live_pair'), dict)
+            or manifest['live_pair'].get('performance_evidence') is not False):
+        raise ValueError('Comparison requires a Guard live-pair run manifest')
+    target = manifest.get('target')
+    mask = manifest.get('mask')
+    if (not isinstance(target, dict) or target.get('hwnd') != captures[0][0]['hwnd']
+            or not isinstance(mask, dict) or not isinstance(mask.get('sha256'), str)):
+        raise ValueError('Run target or mask does not match the captured pairs')
+    path = run/'live-pair-result.json'
+    if not path.is_file():
+        raise ValueError('Run validate_live_pairs.py before comparing captured frames')
+    validated = json.loads(path.read_text(encoding='utf-8'))
+    width, height = captures[0][0]['width'], captures[0][0]['height']
+    mask_result = validated.get('mask')
+    rows = validated.get('rows')
+    if (validated.get('passed') is not True or not isinstance(mask_result, dict)
+            or mask_result.get('sha256') != mask['sha256']
+            or (mask_result.get('width'), mask_result.get('height')) != (width, height)
+            or not isinstance(rows, list) or len(rows) != len(captures)):
+        raise ValueError('Pixel validation does not match this run and mask')
+    by_frame = {row.get('frame_index'): row for row in rows if isinstance(row, dict)}
+    if len(by_frame) != len(captures):
+        raise ValueError('Pixel validation has missing or duplicate frame identities')
+    for meta, paths in captures:
+        row = by_frame.get(meta['frame_index'])
+        if (not isinstance(row, dict) or row.get('passed') is not True
+                or any(row.get(key) != meta[key] for key in
+                       ('frame_index', 'capture_serial', 'source_qpc', 'copy_submission_fence'))):
+            raise ValueError('Pixel validation does not match the captured frame identities')
+        files = row.get('files')
+        if not isinstance(files, dict):
+            raise ValueError('Pixel validation has no file hashes')
+        for key, frame_path in zip(('source', 'pre_hud', 'post_hud'), paths):
+            expected = files.get(key)
+            if (not isinstance(expected, dict) or expected.get('name') != frame_path.name
+                    or expected.get('sha256') != hashlib.sha256(frame_path.read_bytes()).hexdigest()):
+                raise ValueError('Captured frame changed after pixel validation')
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('run', type=Path)
@@ -67,6 +108,9 @@ def main():
         x0, y0, x1, y1 = bounds
         if not (0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height):
             raise ValueError('ROI is outside the matched source')
+    manifest_path = args.run/'manifest.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
+    validation_sha256 = verify_validation(args.run, captures, manifest)
     out.mkdir(exist_ok=True)
     results = []
     frame_records = []
@@ -120,11 +164,10 @@ def main():
                     draw.text((i*tile_width+8, 10), label, fill='white', font=font)
                     sheet.paste(crops[key].resize((tile_width, tile_height), Image.Resampling.NEAREST), (i*tile_width, 40))
                 sheet.save(out/(name+'.png'))
-    manifest_path = args.run/'manifest.json'
-    manifest = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
     summary = dict(rows=results, sample_count=len(captures), frames=frame_records,
         settings=manifest['settings'], worker_sha256=manifest['integrity']['worker_sha256'],
         run_manifest_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        pixel_validation_sha256=validation_sha256,
         scope='Identical live frames/history. ROI metrics include background; '
         'the color-selected subset is a declared proxy, not perceptual quality or ground-truth HUD pixels.',
         regions_sha256=hashlib.sha256(args.regions.read_bytes()).hexdigest() if args.regions else None)
