@@ -174,9 +174,9 @@ def main():
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
                 dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py', LAB / 'gfn_core/wire.py')}))
-    atomic_json(ROOT / 'active.json', dict(run=str(run), pid=os.getpid(), owner_token=a.owner_token))
-    atomic_json(ROOT / 'latest.json', dict(run=str(run)))
     try:
+        atomic_json(ROOT / 'active.json', dict(run=str(run), pid=os.getpid(), owner_token=a.owner_token))
+        atomic_json(ROOT / 'latest.json', dict(run=str(run)))
         with (run / 'controller.log').open('w', encoding='utf-8', buffering=1) as log:
             sys.stdout = sys.stderr = log
             engine = RecordedEngine(run, target, settings, win)
