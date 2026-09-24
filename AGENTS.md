@@ -70,6 +70,8 @@ runtime integrity is still checked by the launcher.
 `remote_desktop.ps1` restores its neutral on-demand probe action after success
 or failure and limits console output to GFN-related window metadata; full
 screenshots and window inventory remain ignored local diagnostics.
+`probe_daily_ui.ps1` also restores its neutral on-demand action after either
+result; a failed probe must not leave a prior click or key as the saved action.
 
 HUD-impact comparison uses same-command-list source/pre-HUD/post-HUD readbacks,
 not separate-time screenshots. Nine current G2/NR720 samples show tone/contrast

@@ -110,6 +110,7 @@ creates the desktop shortcut and an on-demand interactive task named
 `Geforce-NR-Panel`; it installs no autostart trigger. Existing Core/Lab
 entry points and binaries remain intact. `daily_ui_probe.py` and
 `probe_daily_ui.ps1` are bounded development-only UI verification helpers.
+The UI probe restores its neutral on-demand task action after success or failure.
 
 ## Current acceptance
 
