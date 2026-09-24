@@ -93,7 +93,8 @@ composition capture can include unrelated apps unless GFN is verified full-scree
 and foreground before and after the bounded capture.
 `compare_hud_pairs.py --all-frames` renders all three same-frame variants per
 capture under ignored run output only after a passing `live-pair-result.json`;
-it checks run target, mask, capture identities, and raw-file hashes before output.
+the validator binds the complete run manifest hash, and comparison checks the
+run target, mask, capture identities, and raw-file hashes before output.
 
 `mask_editor.py` captures an in-memory, visible-window SDR preview only while
 renderers are stopped. Integer subsampling uses exact source-pixel coordinates.

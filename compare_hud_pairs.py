@@ -45,7 +45,7 @@ def capture_metadata(pairs):
     return captures
 
 
-def verify_validation(run, captures, manifest):
+def verify_validation(run, captures, manifest, manifest_sha256):
     if (manifest.get('mode') != 'guard' or not isinstance(manifest.get('live_pair'), dict)
             or manifest['live_pair'].get('performance_evidence') is not False):
         raise ValueError('Comparison requires a Guard live-pair run manifest')
@@ -58,6 +58,8 @@ def verify_validation(run, captures, manifest):
     if not path.is_file():
         raise ValueError('Run validate_live_pairs.py before comparing captured frames')
     validated = json.loads(path.read_text(encoding='utf-8'))
+    if validated.get('run_manifest_sha256') != manifest_sha256:
+        raise ValueError('Run manifest changed after pixel validation')
     width, height = captures[0][0]['width'], captures[0][0]['height']
     mask_result = validated.get('mask')
     rows = validated.get('rows')
@@ -109,8 +111,10 @@ def main():
         if not (0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height):
             raise ValueError('ROI is outside the matched source')
     manifest_path = args.run/'manifest.json'
-    manifest = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
-    validation_sha256 = verify_validation(args.run, captures, manifest)
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = json.loads(manifest_bytes.decode('utf-8-sig'))
+    manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    validation_sha256 = verify_validation(args.run, captures, manifest, manifest_sha256)
     out.mkdir(exist_ok=True)
     results = []
     frame_records = []
@@ -166,7 +170,7 @@ def main():
                 sheet.save(out/(name+'.png'))
     summary = dict(rows=results, sample_count=len(captures), frames=frame_records,
         settings=manifest['settings'], worker_sha256=manifest['integrity']['worker_sha256'],
-        run_manifest_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        run_manifest_sha256=manifest_sha256,
         pixel_validation_sha256=validation_sha256,
         scope='Identical live frames/history. ROI metrics include background; '
         'the color-selected subset is a declared proxy, not perceptual quality or ground-truth HUD pixels.',

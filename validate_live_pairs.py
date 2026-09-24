@@ -36,6 +36,18 @@ def local_artifact(directory: Path, name: object) -> Path:
 
 def validate(directory: Path, mask_path: Path) -> dict:
     mask, mask_w, mask_h = load_mask(mask_path)
+    manifest_path = directory.parent / 'manifest.json'
+    manifest_bytes = manifest_path.read_bytes()
+    run_manifest = json.loads(manifest_bytes.decode('utf-8-sig'))
+    target = run_manifest.get('target')
+    run_mask = run_manifest.get('mask')
+    if (run_manifest.get('mode') != 'guard'
+            or not isinstance(run_manifest.get('live_pair'), dict)
+            or run_manifest['live_pair'].get('performance_evidence') is not False
+            or not isinstance(target, dict) or type(target.get('hwnd')) is not int
+            or target['hwnd'] <= 0 or not isinstance(run_mask, dict)
+            or run_mask.get('sha256') != digest(mask_path)):
+        raise ValueError('Run manifest target, mode, or mask does not match live-pair validation')
     manifests = sorted(directory.glob('pair-*.json'))
     if len(manifests) != 3:
         raise ValueError(f'Expected exactly three pair manifests, got {len(manifests)}')
@@ -92,11 +104,12 @@ def validate(directory: Path, mask_path: Path) -> dict:
         if any(b <= a for a, b in zip(values, values[1:])):
             raise ValueError(f'{key} values are not strictly increasing: {values}')
     hwnds = {int(json.loads(path.read_text(encoding='utf-8'))['hwnd']) for path in manifests}
-    if len(hwnds) != 1 or next(iter(hwnds)) <= 0:
+    if hwnds != {target['hwnd']}:
         raise ValueError(f'Expected one nonzero WGC HWND, got {sorted(hwnds)}')
     result = {
         'passed': all(row['passed'] for row in rows),
         'scope': 'Three live WGC frames copied source/pre-HUD/post-HUD in each frame same GPU command list with NVOFA enabled.',
+        'run_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),
         'mask': {'name': mask_path.name, 'sha256': digest(mask_path), 'width': mask_w, 'height': mask_h},
         'rows': rows,
     }

@@ -308,7 +308,8 @@ proxies, not automatic HUD detection or perceptual-quality scores.
 Run `validate_live_pairs.py` with `--output runs/<name>/live-pair-result.json`
 first. The comparison helper requires that passing result and checks the run's
 target HWND, mask digest, capture identities, and current raw-frame hashes
-against it before writing images or metrics.
+against it before writing images or metrics. Validation also binds the complete
+run manifest hash, so changed settings or worker records require revalidation.
 Use the existing overlay Python environment for NumPy and Pillow. Add
 `--all-frames` to render each of the three same-frame source / NR / Guard PNGs
 under `hud-comparison/frames/`. The tool rejects reused capture identities,

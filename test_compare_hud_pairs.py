@@ -23,6 +23,7 @@ class ComparisonTests(unittest.TestCase):
                 target=dict(hwnd=12), mask=dict(sha256='test-mask'),
                 settings={}, integrity=dict(worker_sha256='test'))
             (root/'manifest.json').write_text(json.dumps(manifest))
+            manifest_sha256 = hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
             validated_rows = []
             for index in (30, 60, 90):
                 meta = dict(schema=1, width=1, height=1, hwnd=12,
@@ -42,6 +43,7 @@ class ComparisonTests(unittest.TestCase):
                 validated_rows.append(dict(frame_index=index, capture_serial=index,
                     source_qpc=index, copy_submission_fence=index, files=files, passed=True))
             (root/'live-pair-result.json').write_text(json.dumps(dict(passed=True,
+                run_manifest_sha256=manifest_sha256,
                 mask=dict(sha256='test-mask', width=1, height=1), rows=validated_rows)))
             regions = root/'regions.json'
             regions.write_text(json.dumps(dict(pixel=[0, 0, 1, 1])))
@@ -66,6 +68,12 @@ class ComparisonTests(unittest.TestCase):
             (root/'manifest.json').write_text(json.dumps(manifest))
             with patch('sys.argv', ['compare_hud_pairs.py', folder]):
                 with self.assertRaisesRegex(ValueError, 'Run target or mask'):
+                    main()
+            manifest['target']['hwnd'] = 12
+            manifest['settings'] = dict(nr_height=900)
+            (root/'manifest.json').write_text(json.dumps(manifest))
+            with patch('sys.argv', ['compare_hud_pairs.py', folder]):
+                with self.assertRaisesRegex(ValueError, 'Run manifest changed'):
                     main()
 
     def test_reused_capture_identity_is_rejected_before_output(self):
