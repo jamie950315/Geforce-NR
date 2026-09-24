@@ -31,9 +31,10 @@ prove that a GFN session is available. The diagnostic `launch_run.ps1` and
 `remote_desktop.ps1` derive their script paths from their deployment directory;
 the adjacent dependencies and scheduled tasks are still required.
 The desktop probe restores its neutral on-demand task action even when a probe
-fails, and records only GFN-related window metadata. It captures a fresh desktop
-image only while a GFN window covers the foreground screen; the JSON result
-reports `screenshot_captured`, since an older ignored `desktop.png` may remain.
+fails, and records only GFN-related window metadata. It captures a fresh image
+only while a GFN window covers the foreground screen, cropping out an exposed
+taskbar below the window. The JSON result reports `screenshot_captured`, since
+an older ignored `desktop.png` may remain.
 
 Windows deployment: `C:\Users\jamie\dev\gfn-codex-live-20260921`.
 These helpers use a minimally repaired HUD Guard and the existing Lab controller.

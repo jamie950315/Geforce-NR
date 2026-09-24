@@ -85,9 +85,11 @@ left, top, right, bottom = win32gui.GetWindowRect(result['foreground'])
 if (result['foreground_is_gfn'] and left <= 0 and top <= 0
         and right >= screen_width and bottom >= screen_height - 80):
     try:
-        im = ImageGrab.grab(bbox=(0, 0, screen_width, screen_height))
+        capture_bottom = min(screen_height, bottom)
+        im = ImageGrab.grab(bbox=(0, 0, screen_width, capture_bottom))
         im.save(ROOT / 'desktop.png')
         result['screenshot_size'] = im.size
+        result['screenshot_bounds'] = [0, 0, screen_width, capture_bottom]
         result['screenshot_captured'] = True
     except Exception as exc:
         result['capture_error'] = str(exc)

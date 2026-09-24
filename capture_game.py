@@ -23,7 +23,7 @@ def checked_game_window():
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     if (not is_gfn_window(hwnd) or not title or title.strip().lower() == 'geforce now'
             or (width, height) != (2560, 1440) or left > 0 or top > 0
-            or right < width or bottom < height - 80):
+            or right < width or bottom < height):
         raise RuntimeError('A full-screen GFN game must be foreground')
     return hwnd
 
