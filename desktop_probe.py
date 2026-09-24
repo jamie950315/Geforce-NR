@@ -25,7 +25,8 @@ rows = []
 
 def visit(hwnd, _):
     title = win32gui.GetWindowText(hwnd)
-    if title and win32gui.IsWindowVisible(hwnd):
+    if (win32gui.IsWindowVisible(hwnd)
+            and ('GeForce NOW' in title or title.startswith('Geforce NR'))):
         rows.append(dict(hwnd=hwnd, title=title, rect=win32gui.GetWindowRect(hwnd),
                          pid=win32process.GetWindowThreadProcessId(hwnd)[1]))
 
@@ -63,11 +64,20 @@ if args.click or args.key:
         if args.key in ('stats','advanced','overlay'):key_event(17, win32con.KEYEVENTF_KEYUP)
     time.sleep(2)
 result['foreground'] = win32gui.GetForegroundWindow()
-result['foreground_title'] = win32gui.GetWindowText(result['foreground'])
-try:
-    im = ImageGrab.grab()
-    im.save(ROOT / 'desktop.png')
-    result['screenshot_size'] = im.size
-except Exception as exc:
-    result['capture_error'] = str(exc)
+foreground_title = win32gui.GetWindowText(result['foreground'])
+result['foreground_title'] = (foreground_title if 'GeForce NOW' in foreground_title
+                              or foreground_title.startswith('Geforce NR') else None)
+result['screenshot_captured'] = False
+screen_width = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
+screen_height = win32api.GetSystemMetrics(win32con.SM_CYSCREEN)
+left, top, right, bottom = win32gui.GetWindowRect(result['foreground'])
+if ('GeForce NOW' in foreground_title and left <= 0 and top <= 0
+        and right >= screen_width and bottom >= screen_height - 80):
+    try:
+        im = ImageGrab.grab(bbox=(0, 0, screen_width, screen_height))
+        im.save(ROOT / 'desktop.png')
+        result['screenshot_size'] = im.size
+        result['screenshot_captured'] = True
+    except Exception as exc:
+        result['capture_error'] = str(exc)
 (ROOT / 'desktop.json').write_text(json.dumps(result, indent=2), encoding='utf-8')

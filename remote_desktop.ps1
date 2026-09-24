@@ -34,6 +34,7 @@ try {
     [pscustomobject]@{
         foreground_title = $foregroundTitle
         foreground_is_gfn = [bool]($result.foreground_title -match 'GeForce NOW')
+        screenshot_captured = [bool]$result.screenshot_captured
         screenshot_size = $result.screenshot_size
         windows = $windows
     } | ConvertTo-Json -Depth 4
