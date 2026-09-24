@@ -76,6 +76,8 @@ window covering the screen; check `screenshot_captured` before using the ignored
 `desktop.png`.
 `probe_daily_ui.ps1` also restores its neutral on-demand action after either
 result; a failed probe must not leave a prior click or key as the saved action.
+The panel-hotkey probe requires a GFN process window other than the client home
+window.
 
 HUD-impact comparison uses same-command-list source/pre-HUD/post-HUD readbacks,
 not separate-time screenshots. Nine current G2/NR720 samples show tone/contrast

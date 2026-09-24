@@ -12,6 +12,7 @@ import win32con
 import win32gui
 import win32process
 from PIL import ImageGrab
+from gfn_window_identity import is_gfn_window
 
 ROOT = Path(__file__).resolve().parent
 
@@ -32,8 +33,9 @@ def main():
     args = ap.parse_args()
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     if args.panel_hotkey:
-        title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
-        if 'GeForce NOW' not in title:
+        foreground = win32gui.GetForegroundWindow()
+        title = win32gui.GetWindowText(foreground)
+        if not is_gfn_window(foreground) or title.strip().lower() == 'geforce now':
             raise RuntimeError('Panel hotkey test requires the game in foreground')
         for key in (17, 18, 0x78):
             win32api.keybd_event(key, win32api.MapVirtualKey(key, 0), 0, 0)
