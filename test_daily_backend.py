@@ -55,12 +55,14 @@ class DailyTests(unittest.TestCase):
             c._current_target = lambda _: target
             c.win = SimpleNamespace(identity=lambda _: ('python', 10), u=SimpleNamespace(SetForegroundWindow=Mock(return_value=True)))
             with patch('daily_backend.subprocess.Popen') as launch:
-                c.start(target, dict(DEFAULTS, nr_height=1080), persist=False, fps=60, panel_owner=(50, 60))
+                c.start(target, dict(DEFAULTS, nr_height=1080), persist=False, fps=60,
+                        panel_owner=(50, 60), appearance_preset='clean')
             args = launch.call_args.args[0]
             self.assertEqual(args[args.index('--fps')+1], '60')
             self.assertEqual(args[args.index('--height')+1], '1080')
             self.assertEqual(args[args.index('--panel-pid')+1], '50')
             self.assertEqual(args[args.index('--panel-created')+1], '60')
+            self.assertEqual(args[args.index('--appearance-preset')+1], 'clean')
             self.assertEqual(c.preference_file.read_bytes(), original)
             self.assertEqual(c.settings, DEFAULTS)
             self.assertIsNone(c.chain)
@@ -74,6 +76,9 @@ class DailyTests(unittest.TestCase):
         for owner in ((1,), (1, 0), (True, 2), (1, 2, 3), '1,2'):
             with self.subTest(owner=owner), self.assertRaisesRegex(ValueError, 'Panel owner'):
                 c.start({}, DEFAULTS, panel_owner=owner)
+        for preset in ('automatic', '', None, [], True):
+            with self.subTest(preset=preset), self.assertRaisesRegex(ValueError, 'appearance preset'):
+                c.start({}, DEFAULTS, appearance_preset=preset)
 
     def test_queued_preference_migration_preserves_choices_and_backs_up(self):
         old = dict(DEFAULTS, hdr=True, hdr_mapping='legacy', nr_height=1080, mode='guard')
@@ -119,6 +124,7 @@ class DailyTests(unittest.TestCase):
                 self.assertEqual(c.settings['hdr_queued'], queued)
                 self.assertEqual(args[args.index('--height')+1], '720')
                 self.assertEqual(args[args.index('--fps')+1], '120')
+                self.assertEqual(args[args.index('--appearance-preset')+1], 'inherited')
 
     def test_poll_identifies_combined_capture_queue_mode(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -10,6 +10,7 @@ import time
 import uuid
 from application_windows import enumerate_application_windows
 from processing_support import NR_HEIGHTS
+from appearance_presets import APPEARANCE_PRESETS
 from shared_json import read_json
 
 DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False)
@@ -206,13 +207,16 @@ class DailyController:
         self.chain = chain
         chain.start(current)
 
-    def start(self, target, settings, *, persist=True, fps=120, panel_owner=None):
+    def start(self, target, settings, *, persist=True, fps=120, panel_owner=None,
+              appearance_preset='inherited'):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
         if type(fps) is not int or fps not in (60, 120):
             raise ValueError('FPS must be 60 or 120')
         if type(persist) is not bool:
             raise ValueError('Preference persistence must be a boolean')
+        if appearance_preset not in APPEARANCE_PRESETS:
+            raise ValueError('Unsupported appearance preset')
         if panel_owner is not None and (not isinstance(panel_owner, tuple) or len(panel_owner) != 2
                 or any(type(part) is not int or part <= 0 for part in panel_owner)):
             raise ValueError('Panel owner must be a positive PID and process creation identity')
@@ -251,6 +255,7 @@ class DailyController:
         args = [str(python), str(self.root/'live_run.py'), '--name', name,
                 '--hwnd', str(current['hwnd']), '--mode', value['mode'], '--seconds', '0', '--daily',
                 '--fps', str(fps),
+                '--appearance-preset', appearance_preset,
                 '--owner-pid', str(os.getpid()), '--owner-created', str(owner_created), '--owner-token', self.owner_token,
                 '--target-pid', str(current['pid']), '--target-created', str(current['created']),
                 '--target-title', current['title'], '--target-width', str(current['width']),

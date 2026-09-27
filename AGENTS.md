@@ -90,6 +90,15 @@ WS_EX_WINDOWEDGE on Windows; restoration tracks this verified side effect.
 handling for observed Windows sharing/access-denied races. No in-place JSON
 fallback. Normal daily sessions remain 120 FPS; `--fps 60` is explicit for the
 chain, and panel hotkeys have a separately verified UI identity from the owner.
+Chiaki one-click launches explicitly use `--appearance-preset clean` from
+`appearance_presets.py`: style1/auto-mask1/intensity1/tone0.25/local-structure0/
+skin-structure0. The preset is recorded in the manifest and its module is hashed.
+Ordinary daily/diagnostic launches retain inherited appearance unless requested;
+do not modify Core/Lab appearance.json. Paused-game NR/bypass/NR comparisons
+identified extra structure enhancement as a contributor to dark-area grain.
+Clean reduces that enhancement, not source resolution or overall NR intensity;
+it is not a blur filter or universal temporal/face denoising claim. Keep pixel
+comparisons local and distinguish flat-region noise from real texture/edges.
 Ctrl+Alt+F9 raises the owning panel. Normal close waits for safe stop; switching
 away from the selected window suspends rendering, including another window in
 the same process. Preferences and diagnostic output stay local.

@@ -70,12 +70,21 @@ must be selected/connected in Chiaki first.
 
 The supervisor sets a physical **1920x1080 borderless** client/capture rectangle,
 including at 125% Windows scaling, without changing global display scaling. It
-then starts NR1080 at 60 source FPS, optical flow 720/G2/Fast, Color-preserving
+then starts Clean NR1080 at 60 source FPS, optical flow 720/G2/Fast, Color-preserving
 queued HDR, and LS1 to 1440p with LSFG Fixed 2x / Performance / Flow Scale 75 /
 WGC / Queue Target 1 / Max Frame Latency 1. LS captures the verified NR output,
 not the original Chiaki window. NR and hardware flow must be active before LS
 starts. This is a near-120-FPS configuration, not a guarantee of locked 120 FPS,
 artifact-free motion, or low end-to-end input latency.
+
+The chain explicitly selects the `clean` NR appearance preset rather than
+inheriting aggressive Core/Lab detail settings. It retains NR intensity 1.0
+and local tone 0.25 while setting local and skin structure enhancement to zero.
+This reduces the observed grain added to smooth dark areas without applying a
+full-frame blur or disabling NR. It also reduces the extra texture enhancement;
+it is not a universal denoising or moving-face quality guarantee. Ordinary
+**Start** still uses the inherited appearance, and Core/Lab configuration files
+are never rewritten. Diagnostic CLI selection is `--appearance-preset clean`.
 
 **Stop safely**, Ctrl+Alt+Q, opening the panel with Ctrl+Alt+F9, leaving the
 playback application, disconnecting the stream, or closing the panel stops the

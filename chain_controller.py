@@ -154,7 +154,7 @@ def supervise(root, folder):
             print(state+': '+detail, flush=True)
             last_detail[0] = detail
         value = dict(token=token, state=state, detail=detail, run=str(folder),
-            geometry='Chiaki 1920 x 1080 → NR1080 → LS1 2560 x 1440 → LSFG 2x',
+            geometry='Chiaki 1920 x 1080 → Clean NR1080 → LS1 2560 x 1440 → LSFG 2x',
             nr_confirmed=False, hardware_flow_active=False, hdr_status='HDR / Color-preserving / queued',
             chain_target=journal.get('target'))
         if snapshot:
@@ -200,10 +200,10 @@ def supervise(root, folder):
         check_cancel()
         native.configure_ls(preflight, folder, lambda value: save('ls_config', value))
         check_cancel()
-        status('starting', 'Starting NR1080 and hardware optical flow at 60 source FPS...')
+        status('starting', 'Starting Clean NR1080 and hardware optical flow at 60 source FPS...')
         preset = dict(DEFAULTS, nr_height=1080, hdr=True, hdr_mapping='color-preserving', hdr_queued=True)
         controller.start(target, preset, persist=False, fps=60,
-                         panel_owner=(request['owner_pid'], request['owner_created']))
+                         panel_owner=(request['owner_pid'], request['owner_created']), appearance_preset='clean')
         save('nr_run', str(controller.run));save('nr_owner_token', controller.owner_token)
         until = time.monotonic()+30
         while controller.busy and time.monotonic() < until:
@@ -276,7 +276,7 @@ def supervise(root, folder):
             if snapshot.get('state') == 'suspended':
                 reason = 'capture_suspended'
                 break
-            status('running', 'Chiaki + NR1080 + LS1 + LSFG 2x active. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens the panel.', snapshot)
+            status('running', 'Chiaki + Clean NR1080 + LS1 + LSFG 2x active. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens the panel.', snapshot)
             time.sleep(.5)
     except InterruptedError:
         reason = 'stop_requested'

@@ -11,6 +11,7 @@ $requirements = [ordered]@{
     'Chiaki connection support' = (Join-Path $root 'chiaki_connect.py')
     'Chiaki and LS window support' = (Join-Path $root 'chiaki_chain_native.py')
     'Shared JSON snapshots' = (Join-Path $root 'shared_json.py')
+    'NR appearance presets' = (Join-Path $root 'appearance_presets.py')
     'Daily launcher' = (Join-Path $root 'live_run.py')
     'Processing size support' = (Join-Path $root 'processing_support.py')
     'Application window selection' = (Join-Path $root 'application_windows.py')

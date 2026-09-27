@@ -374,7 +374,7 @@ class DailyApp:
             command=self.start_chiaki_chain)
         self.chain_button.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(6, 0))
         self.ttk.Label(controls, style='Muted.TLabel', wraplength=730, justify='left',
-            text='1080p NR → LS1 1440p → LSFG 2x · fixes DPI automatically. Separate preset; daily preferences stay unchanged.').grid(
+            text='Clean NR1080 → LS1 1440p → LSFG 2x · fixes DPI. Reduced structure enhancement; NR intensity retained.').grid(
                 row=6, column=0, columnspan=3, sticky='ew', pady=(4, 0))
 
         body = self.ttk.Frame(outer, style="App.TFrame")

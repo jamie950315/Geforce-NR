@@ -84,21 +84,28 @@ class DailyGeometryTests(unittest.TestCase):
                 return {} if path.name == 'appearance.json' else json.loads(path.read_text())
 
             settings = Mock(return_value=SimpleNamespace(to_dict=lambda: {}))
+            appearance = Mock(return_value=None)
             with ExitStack() as stack:
                 stack.enter_context(patch.object(sys, 'argv', ['live_run.py', '--name', 'failure-check',
-                    '--hwnd', '1', '--mode', 'bypass', '--seconds', '5', '--fps', '60', '--original-worker']))
+                    '--hwnd', '1', '--mode', 'bypass', '--seconds', '5', '--fps', '60', '--original-worker',
+                    '--appearance-preset', 'clean']))
                 stack.enter_context(patch.dict(os.environ, {}, clear=False))
                 for name, value in [('ROOT', root), ('LIVE', Path(folder) / 'live'),
                                     ('LAB', Path(folder) / 'lab'), ('STABLE', Path(folder) / 'stable'),
                                     ('Win32', lambda: win), ('verify', lambda: {}),
                                     ('digest', lambda _: 'sha'), ('load', read_json),
                                     ('atomic_json', fail_latest),
-                                    ('Appearance', SimpleNamespace(from_dict=lambda _: None)),
+                                    ('Appearance', SimpleNamespace(from_dict=appearance)),
                                     ('Settings', settings)]:
                     stack.enter_context(patch.object(live_run, name, value))
                 with self.assertRaisesRegex(OSError, 'Injected latest-record write failure'):
                     live_run.main()
             self.assertEqual(settings.call_args.kwargs['fps'], 60)
+            from appearance_presets import resolve_appearance
+            appearance.assert_called_once_with(resolve_appearance('clean', {}))
+            manifest = json.loads((root/'runs'/'failure-check'/'manifest.json').read_text())
+            self.assertEqual(manifest['appearance_preset'], 'clean')
+            self.assertIn(str(root/'appearance_presets.py'), manifest['dependencies'])
             self.assertFalse((root / 'active.json').exists())
             self.assertFalse((root / 'latest.json').exists())
             close_handle.assert_called_once_with(42)

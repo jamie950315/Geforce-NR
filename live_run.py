@@ -8,6 +8,7 @@ import sys
 import traceback
 from mask_profiles import validate_mask
 from application_windows import enumerate_application_windows
+from appearance_presets import APPEARANCE_PRESETS, resolve_appearance
 
 ROOT = Path(__file__).resolve().parent
 LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
@@ -107,6 +108,7 @@ def main():
     ap.add_argument('--mode', choices=['bypass', 'nr', 'guard'], required=True)
     ap.add_argument('--seconds', type=int, default=60)
     ap.add_argument('--fps', type=int, choices=[60, 120], default=120)
+    ap.add_argument('--appearance-preset', choices=APPEARANCE_PRESETS, default='inherited')
     ap.add_argument('--height', type=int, choices=NR_HEIGHTS, default=720)
     ap.add_argument('--flow-width', type=int, choices=[320, 640, 960, 1280], default=1280)
     ap.add_argument('--flow-grid', type=int, choices=[2, 4], default=2)
@@ -238,13 +240,14 @@ def main():
     if a.mask:
         mask = dict(path=str(a.mask.resolve()), sha256=digest(a.mask))
         os.environ['GFN_HUD_MASK'] = mask['path']
-    appearance = Appearance.from_dict(load(LAB / 'appearance.json'))
+    appearance = Appearance.from_dict(resolve_appearance(a.appearance_preset, load(LAB / 'appearance.json')))
     settings = Settings(fps=a.fps, nr_height=a.height, duration=a.seconds,
                         bypass=a.mode == 'bypass', profile_frames=not a.daily,
                         appearance=appearance, pacing='source', capture_wait_ms=16,
                         flow_width=a.flow_width, flow_grid=a.flow_grid, flow_preset=a.flow_preset)
     atomic_json(run / 'manifest.json', dict(target=target.to_dict(), settings=settings.to_dict(),
                 mode=a.mode, mask=mask, daily=a.daily, hdr=a.hdr, hdr_display=hdr_display,
+                appearance_preset=a.appearance_preset,
                 hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof, hdr_mapping=a.hdr_mapping,
                 hdr_queued=a.queued_hdr, hdr_capture_queued=a.capture_queued_hdr,
                 hdr_motion_repaired=a.capture_queued_hdr,
@@ -252,7 +255,8 @@ def main():
                 panel_owner=dict(pid=a.panel_pid, created=a.panel_created) if a.panel_pid is not None else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
                 dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py',
-                    LAB / 'gfn_core/config.py', LAB / 'gfn_core/wire.py', ROOT / 'processing_support.py')}))
+                    LAB / 'gfn_core/config.py', LAB / 'gfn_core/wire.py', ROOT / 'processing_support.py',
+                    ROOT / 'appearance_presets.py')}))
     if a.hdr_proof:
         os.environ['GFN_HDR_MANIFEST_SHA256'] = digest(run/'manifest.json')
     try:
