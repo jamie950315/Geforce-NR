@@ -10,6 +10,7 @@ import time
 import uuid
 from application_windows import enumerate_application_windows
 from processing_support import NR_HEIGHTS
+from shared_json import read_json
 
 DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False)
 CHOICES = dict(nr_height=NR_HEIGHTS, flow_width=(320, 640, 960, 1280),
@@ -32,13 +33,20 @@ def atomic_json(path, value):
     tmp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
         tmp.write_text(json.dumps(value, indent=2), encoding='utf-8')
-        tmp.replace(path)
+        # Windows can briefly refuse replacement during concurrent snapshot
+        # reads, even with delete-sharing. Keep replacement atomic and bound
+        # only the observed sharing/access-denied case; never rewrite in place.
+        deadline = time.monotonic()+.5
+        while True:
+            try:
+                tmp.replace(path)
+                break
+            except OSError as exc:
+                if sys.platform != 'win32' or getattr(exc, 'winerror', None) not in (5, 32) or time.monotonic() >= deadline:
+                    raise
+                time.sleep(.01)
     finally:
         tmp.unlink(missing_ok=True)
-
-
-def read_json(path):
-    return json.loads(path.read_text(encoding='utf-8-sig'))
 
 
 def migrate_settings(value):
@@ -74,6 +82,7 @@ class DailyController:
         else:
             self.settings = dict(DEFAULTS)
         self.process = None
+        self.chain = None
         self.run = None
         self.stop_pending = False
         self.stop_sent = False
@@ -88,7 +97,9 @@ class DailyController:
 
     @property
     def busy(self):
-        return self.process is not None and self.process.poll() is None
+        chain = getattr(self, 'chain', None)
+        return bool((chain is not None and chain.busy) or
+                    (self.process is not None and self.process.poll() is None))
 
     def list_targets(self):
         result = []
@@ -184,9 +195,28 @@ class DailyController:
             raise RuntimeError('The window changed during capture; preview discarded')
         return dict(width=width, height=height, ppm=preview)
 
-    def start(self, target, settings):
+    def start_chiaki_chain(self, target=None):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
+        current = self._current_target(target) if target is not None else None
+        from chain_controller import ChainController
+        chain = ChainController(self.root, self.win)
+        # Retain ownership even if start raises after partially launching, so
+        # the panel can still poll cleanup and request an authenticated stop.
+        self.chain = chain
+        chain.start(current)
+
+    def start(self, target, settings, *, persist=True, fps=120, panel_owner=None):
+        if self.busy:
+            raise RuntimeError('This panel already owns a running session')
+        if type(fps) is not int or fps not in (60, 120):
+            raise ValueError('FPS must be 60 or 120')
+        if type(persist) is not bool:
+            raise ValueError('Preference persistence must be a boolean')
+        if panel_owner is not None and (not isinstance(panel_owner, tuple) or len(panel_owner) != 2
+                or any(type(part) is not int or part <= 0 for part in panel_owner)):
+            raise ValueError('Panel owner must be a positive PID and process creation identity')
+        self.chain = None
         value = validated(settings)
         current = self._current_target(target)
         if value['hdr']:
@@ -209,7 +239,8 @@ class DailyController:
                        self.root.parent/'gfn-hud-live-20260921-7b03'):
             if (folder/'active.json').exists():
                 raise RuntimeError('Another controller is active; it has been preserved. Stop it first.')
-        self.save_settings(value)
+        if persist:
+            self.save_settings(value)
         name = 'daily-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
         self.run = self.root/'runs'/name
         self.metrics = {}
@@ -219,12 +250,15 @@ class DailyController:
         python = self.root.parent/'gfn-nr-core/.venv/Scripts/pythonw.exe'
         args = [str(python), str(self.root/'live_run.py'), '--name', name,
                 '--hwnd', str(current['hwnd']), '--mode', value['mode'], '--seconds', '0', '--daily',
+                '--fps', str(fps),
                 '--owner-pid', str(os.getpid()), '--owner-created', str(owner_created), '--owner-token', self.owner_token,
                 '--target-pid', str(current['pid']), '--target-created', str(current['created']),
                 '--target-title', current['title'], '--target-width', str(current['width']),
                 '--target-height', str(current['height']),
                 '--height', str(value['nr_height']), '--flow-width', str(value['flow_width']),
                 '--flow-grid', str(value['flow_grid']), '--flow-preset', value['flow_preset']]
+        if panel_owner is not None:
+            args += ['--panel-pid', str(panel_owner[0]), '--panel-created', str(panel_owner[1])]
         if value['mode'] == 'guard':
             args += ['--mask', str(mask)]
         if value['hdr']:
@@ -247,6 +281,9 @@ class DailyController:
             self.detail += ' Switch to the application window to resume processing.'
 
     def stop(self):
+        if getattr(self, 'chain', None) is not None:
+            self.chain.stop()
+            return
         if self.busy:
             self.stop_pending = True
             self.state, self.detail = 'stopping', 'Waiting for the controller and GPU worker to exit safely...'
@@ -271,6 +308,8 @@ class DailyController:
         self.stop_sent = True
 
     def poll(self):
+        if getattr(self, 'chain', None) is not None:
+            return dict(self.chain.poll(), chain=True)
         end_reason = None
         if self.process:
             if self.run.exists():

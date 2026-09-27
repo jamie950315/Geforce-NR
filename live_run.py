@@ -23,6 +23,7 @@ Engine = load_engine(Settings)
 
 class RecordedEngine(Engine):
     owner = None
+    panel_owner = None
     mask_geometry = None
     daily_geometry = None
 
@@ -68,8 +69,9 @@ class RecordedEngine(Engine):
 
     def _command(self, action, data):
         if action == 'panel' and self.owner:
-            if self.win.identity(self.owner[0])[1] == self.owner[1]:
-                for hwnd in self.win.worker_windows(self.owner[0]):
+            panel_owner = self.panel_owner or self.owner
+            if self.win.identity(panel_owner[0])[1] == panel_owner[1]:
+                for hwnd in self.win.worker_windows(panel_owner[0]):
                     title = ctypes.create_unicode_buffer(256)
                     self.win.u.GetWindowTextW(hwnd, title, len(title))
                     if title.value == 'Geforce NR':
@@ -104,6 +106,7 @@ def main():
     ap.add_argument('--hwnd', type=int, required=True)
     ap.add_argument('--mode', choices=['bypass', 'nr', 'guard'], required=True)
     ap.add_argument('--seconds', type=int, default=60)
+    ap.add_argument('--fps', type=int, choices=[60, 120], default=120)
     ap.add_argument('--height', type=int, choices=NR_HEIGHTS, default=720)
     ap.add_argument('--flow-width', type=int, choices=[320, 640, 960, 1280], default=1280)
     ap.add_argument('--flow-grid', type=int, choices=[2, 4], default=2)
@@ -125,12 +128,18 @@ def main():
     ap.add_argument('--owner-pid', type=int)
     ap.add_argument('--owner-created', type=int)
     ap.add_argument('--owner-token')
+    ap.add_argument('--panel-pid', type=int)
+    ap.add_argument('--panel-created', type=int)
     ap.add_argument('--target-pid', type=int)
     ap.add_argument('--target-created', type=int)
     ap.add_argument('--target-title')
     ap.add_argument('--target-width', type=int)
     ap.add_argument('--target-height', type=int)
     a = ap.parse_args()
+    if ((a.panel_pid is not None or a.panel_created is not None)
+            and (not a.daily or not a.panel_pid or not a.panel_created
+                 or a.panel_pid <= 0 or a.panel_created <= 0)):
+        raise ValueError('Panel identity requires daily mode, a positive PID and process creation identity')
     if a.queued_hdr and (not a.hdr or a.hdr_mapping != 'color-preserving'):
         raise ValueError('Queued HDR requires HDR color-preserving mapping')
     if a.capture_queued_hdr and not a.queued_hdr:
@@ -176,6 +185,8 @@ def main():
             raise RuntimeError('Existing controller preserved: ' + str(root))
     if a.daily and win.identity(a.owner_pid)[1] != a.owner_created:
         raise RuntimeError('Owning UI is unavailable')
+    if a.panel_pid is not None and win.identity(a.panel_pid)[1] != a.panel_created:
+        raise RuntimeError('The requested control panel is unavailable')
     available = (enumerate_application_windows(win, excluded_pids=(a.owner_pid,))
                  if a.daily else [t for t in win.enumerate() if t.title.strip().lower() != 'geforce now'])
     targets = [t for t in available if t.hwnd == a.hwnd]
@@ -228,7 +239,7 @@ def main():
         mask = dict(path=str(a.mask.resolve()), sha256=digest(a.mask))
         os.environ['GFN_HUD_MASK'] = mask['path']
     appearance = Appearance.from_dict(load(LAB / 'appearance.json'))
-    settings = Settings(fps=120, nr_height=a.height, duration=a.seconds,
+    settings = Settings(fps=a.fps, nr_height=a.height, duration=a.seconds,
                         bypass=a.mode == 'bypass', profile_frames=not a.daily,
                         appearance=appearance, pacing='source', capture_wait_ms=16,
                         flow_width=a.flow_width, flow_grid=a.flow_grid, flow_preset=a.flow_preset)
@@ -238,6 +249,7 @@ def main():
                 hdr_queued=a.queued_hdr, hdr_capture_queued=a.capture_queued_hdr,
                 hdr_motion_repaired=a.capture_queued_hdr,
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
+                panel_owner=dict(pid=a.panel_pid, created=a.panel_created) if a.panel_pid is not None else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
                 dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py',
                     LAB / 'gfn_core/config.py', LAB / 'gfn_core/wire.py', ROOT / 'processing_support.py')}))
@@ -251,6 +263,7 @@ def main():
             engine = RecordedEngine(run, target, settings, win)
             if a.daily:
                 engine.owner = (a.owner_pid, a.owner_created)
+                engine.panel_owner = (a.panel_pid, a.panel_created) if a.panel_pid is not None else None
                 engine.daily_geometry = (a.target_width, a.target_height)
             engine.mask_geometry = mask_geometry
             engine.native = native

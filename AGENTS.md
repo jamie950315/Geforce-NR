@@ -71,6 +71,25 @@ existing Core Python/Tk runtime. `daily_backend.py` owns only its own subprocess
 session; stop is bound to a unique owner token and the run/controller records,
 not the Windows venv bootstrap PID. Daily runs use `--daily --seconds 0`, disable
 per-frame trace logging, and stop if the owning UI PID/creation identity dies.
+The separate **Play Chiaki + NR + LSFG** action uses `chain_controller.py`,
+`chiaki_connect.py`, and `chiaki_chain_native.py`; it does not change saved daily
+preferences. It reuses a PID/log-bound received-video session or connects the
+single awake registered LAN PS5 through Chiaki's credential-free CLI arguments.
+Never automate console power or game input. PIN dialogs are not video readiness.
+Physical 1920x1080 borderless geometry is verified under per-monitor DPI awareness
+without changing global scaling. The chain fixes NR1080/60, flow720/G2/Fast,
+queued Color-preserving HDR, LS1/1440p and LSFG Fixed2/Performance75/WGC/Q1/L1.
+LS must capture the exact NR output, not Chiaki; foreign scaling sessions are
+preserved. Stop/app switch/UI exit restores owned window/LS settings and leaves
+Chiaki connected. The ignored `chiaki-chain-active.json` and per-run journal
+bind recovery to a dead supervisor and exact resource identities; never delete
+a failed recovery record to bypass its checks. LS settings edits made outside
+the chain are preserved. Removing WS_CAPTION/WS_THICKFRAME also clears
+WS_EX_WINDOWEDGE on Windows; restoration tracks this verified side effect.
+`shared_json.py` uses delete-sharing snapshot reads, with bounded atomic-replace
+handling for observed Windows sharing/access-denied races. No in-place JSON
+fallback. Normal daily sessions remain 120 FPS; `--fps 60` is explicit for the
+chain, and panel hotkeys have a separately verified UI identity from the owner.
 Ctrl+Alt+F9 raises the owning panel. Normal close waits for safe stop; switching
 away from the selected window suspends rendering, including another window in
 the same process. Preferences and diagnostic output stay local.

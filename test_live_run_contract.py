@@ -12,6 +12,29 @@ from unittest.mock import Mock, patch
 
 @unittest.skipUnless(sys.platform == 'win32', 'Requires the deployed Windows Core/Lab runtime')
 class DailyGeometryTests(unittest.TestCase):
+    def test_panel_command_targets_ui_not_supervisor(self):
+        from live_run import RecordedEngine
+        engine = RecordedEngine.__new__(RecordedEngine)
+        engine.owner = (1, 2)
+        engine.panel_owner = (3, 4)
+        identities, windows = [], []
+        def identity(pid):
+            identities.append(pid)
+            return ('python', 4)
+        def worker_windows(pid):
+            windows.append(pid)
+            return [5]
+        def title(hwnd, buffer, size):
+            buffer.value = 'Geforce NR'
+        activate = Mock(return_value=True)
+        engine.win = SimpleNamespace(identity=identity, worker_windows=worker_windows,
+            u=SimpleNamespace(GetWindowTextW=title, ShowWindow=Mock(), SetForegroundWindow=activate))
+        engine._command('panel', {})
+        self.assertEqual(identities, [3])
+        self.assertEqual(windows, [3])
+        activate.assert_called_once_with(5)
+        self.assertEqual(engine.owner, (1, 2))
+
     def test_daily_other_window_in_same_process_suspends_and_resumes(self):
         from live_run import RecordedEngine
 
@@ -60,9 +83,10 @@ class DailyGeometryTests(unittest.TestCase):
             def read_json(path):
                 return {} if path.name == 'appearance.json' else json.loads(path.read_text())
 
+            settings = Mock(return_value=SimpleNamespace(to_dict=lambda: {}))
             with ExitStack() as stack:
                 stack.enter_context(patch.object(sys, 'argv', ['live_run.py', '--name', 'failure-check',
-                    '--hwnd', '1', '--mode', 'bypass', '--seconds', '5', '--original-worker']))
+                    '--hwnd', '1', '--mode', 'bypass', '--seconds', '5', '--fps', '60', '--original-worker']))
                 stack.enter_context(patch.dict(os.environ, {}, clear=False))
                 for name, value in [('ROOT', root), ('LIVE', Path(folder) / 'live'),
                                     ('LAB', Path(folder) / 'lab'), ('STABLE', Path(folder) / 'stable'),
@@ -70,10 +94,11 @@ class DailyGeometryTests(unittest.TestCase):
                                     ('digest', lambda _: 'sha'), ('load', read_json),
                                     ('atomic_json', fail_latest),
                                     ('Appearance', SimpleNamespace(from_dict=lambda _: None)),
-                                    ('Settings', lambda **_: SimpleNamespace(to_dict=lambda: {}))]:
+                                    ('Settings', settings)]:
                     stack.enter_context(patch.object(live_run, name, value))
                 with self.assertRaisesRegex(OSError, 'Injected latest-record write failure'):
                     live_run.main()
+            self.assertEqual(settings.call_args.kwargs['fps'], 60)
             self.assertFalse((root / 'active.json').exists())
             self.assertFalse((root / 'latest.json').exists())
             close_handle.assert_called_once_with(42)

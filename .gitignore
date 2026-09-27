@@ -17,6 +17,7 @@ daily-probe.png
 /native-*/
 /.venv/
 /active.json
+/chiaki-chain-active.json
 /latest.json
 /last-session.json
 /appearance.json

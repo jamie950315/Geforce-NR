@@ -10,6 +10,71 @@ from daily_backend import DEFAULTS, DailyController, atomic_json, validated, mig
 
 
 class DailyTests(unittest.TestCase):
+    def test_chain_cold_start_defers_target_discovery(self):
+        c = DailyController.__new__(DailyController)
+        c.root, c.win, c.process, c.chain = Path('/isolated'), Mock(), None, None
+        c._current_target = Mock(side_effect=AssertionError('No existing target'))
+        chain = SimpleNamespace(start=Mock())
+        with patch.dict('sys.modules', {'chain_controller': SimpleNamespace(ChainController=lambda *args: chain)}):
+            c.start_chiaki_chain()
+        c._current_target.assert_not_called()
+        chain.start.assert_called_once_with(None)
+
+    def test_chain_dispatch_routes_status_stop_and_blocks_preferences(self):
+        c = DailyController.__new__(DailyController)
+        c.root, c.win, c.process, c.chain = Path('/isolated'), Mock(), None, None
+        target = dict(hwnd=1)
+        c._current_target = Mock(return_value=target)
+        chain = SimpleNamespace(busy=True, start=Mock(), stop=Mock(), poll=Mock(return_value={'state': 'running'}))
+        factory = Mock(return_value=chain)
+        with patch.dict('sys.modules', {'chain_controller': SimpleNamespace(ChainController=factory)}):
+            c.start_chiaki_chain(target)
+        factory.assert_called_once_with(c.root, c.win)
+        chain.start.assert_called_once_with(target)
+        self.assertTrue(c.busy)
+        self.assertEqual(c.poll(), {'state': 'running', 'chain': True})
+        with self.assertRaisesRegex(RuntimeError, 'Stop the current session'):
+            c.save_settings(DEFAULTS)
+        with self.assertRaisesRegex(RuntimeError, 'already owns'):
+            c.start(target, DEFAULTS)
+        c.stop()
+        chain.stop.assert_called_once_with()
+
+    def test_temporary_60fps_launch_preserves_saved_preferences(self):
+        with tempfile.TemporaryDirectory() as folder:
+            c = DailyController.__new__(DailyController)
+            c.root = Path(folder)/'isolated'
+            c.root.mkdir()
+            c.preference_file = c.root/'daily-settings.json'
+            c.settings = dict(DEFAULTS)
+            atomic_json(c.preference_file, c.settings)
+            original = c.preference_file.read_bytes()
+            c.process = None
+            c.chain = SimpleNamespace(busy=False)
+            target = dict(hwnd=123, pid=456, created=789, title='Chiaki', width=1920, height=1080)
+            c._current_target = lambda _: target
+            c.win = SimpleNamespace(identity=lambda _: ('python', 10), u=SimpleNamespace(SetForegroundWindow=Mock(return_value=True)))
+            with patch('daily_backend.subprocess.Popen') as launch:
+                c.start(target, dict(DEFAULTS, nr_height=1080), persist=False, fps=60, panel_owner=(50, 60))
+            args = launch.call_args.args[0]
+            self.assertEqual(args[args.index('--fps')+1], '60')
+            self.assertEqual(args[args.index('--height')+1], '1080')
+            self.assertEqual(args[args.index('--panel-pid')+1], '50')
+            self.assertEqual(args[args.index('--panel-created')+1], '60')
+            self.assertEqual(c.preference_file.read_bytes(), original)
+            self.assertEqual(c.settings, DEFAULTS)
+            self.assertIsNone(c.chain)
+
+    def test_launch_rejects_invalid_fps_before_side_effects(self):
+        c = DailyController.__new__(DailyController)
+        c.process = None
+        for fps in (True, 60.0, 30, 240):
+            with self.subTest(fps=fps), self.assertRaisesRegex(ValueError, 'FPS'):
+                c.start({}, DEFAULTS, fps=fps)
+        for owner in ((1,), (1, 0), (True, 2), (1, 2, 3), '1,2'):
+            with self.subTest(owner=owner), self.assertRaisesRegex(ValueError, 'Panel owner'):
+                c.start({}, DEFAULTS, panel_owner=owner)
+
     def test_queued_preference_migration_preserves_choices_and_backs_up(self):
         old = dict(DEFAULTS, hdr=True, hdr_mapping='legacy', nr_height=1080, mode='guard')
         old.pop('hdr_queued')
@@ -53,6 +118,7 @@ class DailyTests(unittest.TestCase):
                 self.assertEqual('--capture-queued-hdr' in args, queued)
                 self.assertEqual(c.settings['hdr_queued'], queued)
                 self.assertEqual(args[args.index('--height')+1], '720')
+                self.assertEqual(args[args.index('--fps')+1], '120')
 
     def test_poll_identifies_combined_capture_queue_mode(self):
         with tempfile.TemporaryDirectory() as folder:

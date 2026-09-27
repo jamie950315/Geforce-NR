@@ -52,6 +52,42 @@ They do not replace Core/Lab binaries or promote a production default.
 
 ## Daily desktop app
 
+### One-click Chiaki playback
+
+Click **Play Chiaki + NR + LSFG** to run the tested playback chain. This is a
+separate preset; normal **Start** and saved NR preferences stay unchanged.
+Chiaki must already be installed and registered, with local PS5 video set to
+1080p/60, High Quality, H.265 HDR and keyboard game input disabled. Windows HDR
+and the attested queued/color-preserving NR build are required on a 2560x1440
+display. Lossless Scaling must be installed with its standard Ctrl+Alt+S hotkey,
+automatic scaling disabled, and no other scaling session active.
+
+The button reuses the unique verified Chiaki stream, or launches installed
+Chiaki and connects the unique awake registered LAN PS5. It does not wake a
+console, store a PIN, or pass credentials on a command line. Complete any login
+dialog in Chiaki and retry if required. Ambiguous consoles or installations
+must be selected/connected in Chiaki first.
+
+The supervisor sets a physical **1920x1080 borderless** client/capture rectangle,
+including at 125% Windows scaling, without changing global display scaling. It
+then starts NR1080 at 60 source FPS, optical flow 720/G2/Fast, Color-preserving
+queued HDR, and LS1 to 1440p with LSFG Fixed 2x / Performance / Flow Scale 75 /
+WGC / Queue Target 1 / Max Frame Latency 1. LS captures the verified NR output,
+not the original Chiaki window. NR and hardware flow must be active before LS
+starts. This is a near-120-FPS configuration, not a guarantee of locked 120 FPS,
+artifact-free motion, or low end-to-end input latency.
+
+**Stop safely**, Ctrl+Alt+Q, opening the panel with Ctrl+Alt+F9, leaving the
+playback application, disconnecting the stream, or closing the panel stops the
+owned chain. The original Chiaki window and LS settings are restored. Chiaki
+stays open; no game input, disconnect, or console sleep command is sent. An
+already-active LS session is never taken over. Concurrent user edits to LS
+settings/window state are preserved and reported rather than overwritten.
+Interrupted sessions retain an ignored recovery journal; the next one-click
+launch restores only the dead supervisor's exact resources before proceeding.
+
+### General application windows
+
 Open **Geforce NR** from the Windows desktop. Open or restore the application,
 click **Refresh**, explicitly select its **Application window**, and click
 **Start**. Entries show the title, executable, size, and PID. The list includes

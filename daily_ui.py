@@ -370,6 +370,12 @@ class DailyApp:
         controls.rowconfigure(4, minsize=48)
         self.ttk.Label(controls, textvariable=self.mask_summary_var, style='Muted.TLabel',
                        wraplength=730, justify='left').grid(row=4, column=0, columnspan=3, sticky='ew', pady=(7, 0))
+        self.chain_button = self.ttk.Button(controls, text='Play Chiaki + NR + LSFG',
+            command=self.start_chiaki_chain)
+        self.chain_button.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(6, 0))
+        self.ttk.Label(controls, style='Muted.TLabel', wraplength=730, justify='left',
+            text='1080p NR → LS1 1440p → LSFG 2x · fixes DPI automatically. Separate preset; daily preferences stay unchanged.').grid(
+                row=6, column=0, columnspan=3, sticky='ew', pady=(4, 0))
 
         body = self.ttk.Frame(outer, style="App.TFrame")
         body.grid(row=3, column=0, sticky="nsew")
@@ -631,6 +637,45 @@ class DailyApp:
             self.messagebox.showerror(APP_TITLE, f"The pipeline could not start.\n\n{exc}")
             self._sync_controls()
 
+    def _chiaki_target(self) -> dict[str, Any] | None:
+        def eligible(target):
+            return PureWindowsPath(target.get('exe', '')).name.lower() in {'chiaki.exe', 'chiaki-ng.exe'}
+        selected = self.target_by_display.get(self.target_var.get())
+        if selected is not None:
+            return selected if eligible(selected) else None
+        candidates = [target for target in self.targets if eligible(target)]
+        # The home UI and CLI stream can be separate processes from one
+        # installation. This is only an acquisition seed: the backend verifies
+        # and resolves the unique active stream before changing any window.
+        installations = {str(PureWindowsPath(target['exe'])).casefold() for target in candidates}
+        return candidates[0] if candidates and len(installations) == 1 else None
+
+    def start_chiaki_chain(self) -> None:
+        target = self._chiaki_target()
+        if not self._chiaki_can_start():
+            self.messagebox.showwarning(APP_TITLE, 'Select a Chiaki window when multiple installations or an unrelated application are listed.')
+            return
+        try:
+            self.controller.start_chiaki_chain(target)
+            self._last_state = 'starting'
+            self.status_state_var.set('STARTING')
+            self.status_detail_var.set('Preparing Chiaki, physical-pixel sizing, NR and Lossless Scaling…')
+            self._sync_controls()
+        except Exception as exc:
+            _write_error_log('Failed to start the Chiaki chain')
+            self.messagebox.showerror(APP_TITLE, f'The Chiaki chain could not start.\n\n{exc}')
+            self._sync_controls()
+
+    def _chiaki_can_start(self) -> bool:
+        if self._chiaki_target() is not None:
+            return True
+        if self.target_by_display.get(self.target_var.get()) is not None:
+            return False
+        # A cold start uses the installed Chiaki and registered-console
+        # discovery. Do not confuse this with ambiguous existing installations.
+        return not any(PureWindowsPath(target.get('exe', '')).name.lower()
+                       in {'chiaki.exe', 'chiaki-ng.exe'} for target in self.targets)
+
     def stop(self) -> None:
         try:
             self.controller.stop()
@@ -662,6 +707,21 @@ class DailyApp:
                 self.target_combo.configure(values=[])
                 self.target_var.set("")
                 self._refresh_mask_status()
+            if (snapshot.get('chain') and not self._closing
+                    and previous_state in {'starting', 'running', 'suspended', 'stopping'}
+                    and snapshot.get('state') in {'stopped', 'error'} and not self._controller_busy()):
+                # The chain restores Chiaki's original physical window bounds.
+                # Refresh that identity/geometry for the next one-click launch.
+                self.refresh_targets()
+                stream = snapshot.get('chain_target')
+                if isinstance(stream, dict):
+                    identity_keys = ('hwnd', 'pid', 'created', 'exe')
+                    for label, target in self.target_by_display.items():
+                        if all(target.get(key) == stream.get(key) for key in identity_keys):
+                            self.target_var.set(label)
+                            self._refresh_mask_status()
+                            break
+                self.status_detail_var.set(str(snapshot.get('detail') or 'Chiaki chain ended.'))
         except Exception as exc:
             _write_error_log("Failed while polling the daily pipeline")
             self._last_state = "error"
@@ -753,6 +813,7 @@ class DailyApp:
 
         has_target = self.target_var.get() in self.target_by_display
         self.start_button.configure(state="normal" if has_target and self._mask_ready and not busy and not self._closing else "disabled")
+        self.chain_button.configure(state='normal' if not busy and not self._closing and self._chiaki_can_start() else 'disabled')
         self.stop_button.configure(state="normal" if busy and self._last_state != "stopping" and not self._closing else "disabled")
         self.open_run_button.configure(
             state="normal" if self._run_path is not None and self._run_path.is_dir() else "disabled"

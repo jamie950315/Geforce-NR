@@ -17,6 +17,94 @@ class Variable:
 
 
 class CloseRecoveryTests(unittest.TestCase):
+    def test_chiaki_chain_requires_unique_or_explicit_chiaki(self):
+        app = DailyApp.__new__(DailyApp)
+        app.target_var = Variable()
+        chiaki = dict(hwnd=1, exe=r'C:\Apps\chiaki.exe')
+        second = dict(hwnd=2, exe=r'C:\Apps\chiaki-ng.exe')
+        other = dict(hwnd=3, exe=r'C:\Apps\editor.exe')
+        app.targets = [chiaki, other]
+        app.target_by_display = {'first': chiaki, 'second': second, 'other': other}
+        self.assertEqual(app._chiaki_target(), chiaki)
+        app.targets.append(second)
+        self.assertIsNone(app._chiaki_target())
+        app.target_var.set('second')
+        self.assertEqual(app._chiaki_target(), second)
+        app.target_var.set('other')
+        self.assertIsNone(app._chiaki_target())
+
+    def test_chiaki_chain_dispatch_does_not_use_daily_preferences(self):
+        app = DailyApp.__new__(DailyApp)
+        target = dict(hwnd=1, exe='chiaki.exe')
+        app._chiaki_target = lambda: target
+        app.controller = SimpleNamespace(start_chiaki_chain=Mock())
+        app._settings_from_form = Mock(side_effect=AssertionError('Must not read daily settings'))
+        app.status_state_var, app.status_detail_var = Variable(), Variable()
+        app._sync_controls = Mock()
+        app.start_chiaki_chain()
+        app.controller.start_chiaki_chain.assert_called_once_with(target)
+        app._settings_from_form.assert_not_called()
+        self.assertEqual(app._last_state, 'starting')
+
+    def test_cold_start_enabled_without_chiaki_but_not_unrelated_selection(self):
+        app = DailyApp.__new__(DailyApp)
+        app.target_var = Variable()
+        other = dict(hwnd=1, exe='editor.exe')
+        app.targets, app.target_by_display = [other], {'other': other}
+        self.assertTrue(app._chiaki_can_start())
+        self.assertIsNone(app._chiaki_target())
+        app.controller = SimpleNamespace(start_chiaki_chain=Mock())
+        app.status_state_var, app.status_detail_var = Variable(), Variable()
+        app._sync_controls = Mock()
+        app.start_chiaki_chain()
+        app.controller.start_chiaki_chain.assert_called_once_with(None)
+        app.target_var.set('other')
+        self.assertFalse(app._chiaki_can_start())
+
+    def test_same_installation_home_and_stream_can_seed_backend_resolution(self):
+        app = DailyApp.__new__(DailyApp)
+        app.target_var = Variable()
+        app.target_by_display = {}
+        home = dict(hwnd=1, exe=r'C:\Apps\chiaki.exe')
+        stream = dict(hwnd=2, exe=r'c:\apps\CHIAKI.EXE')
+        app.targets = [home, stream]
+        self.assertEqual(app._chiaki_target(), home)
+        app.targets.append(dict(hwnd=3, exe=r'C:\Other\chiaki.exe'))
+        self.assertIsNone(app._chiaki_target())
+        self.assertFalse(app._chiaki_can_start())
+
+    def test_finished_chain_refreshes_restored_geometry_once(self):
+        app = DailyApp.__new__(DailyApp)
+        app._last_state, app._closing = 'running', False
+        app.root = SimpleNamespace(after=Mock())
+        app.controller = SimpleNamespace(busy=False, poll=lambda: dict(
+            chain=True, state='stopped', detail='Original settings restored.', end_reason='foreground_changed'))
+        app._set_status = lambda **kwargs: setattr(app, '_last_state', kwargs['state'])
+        app.status_detail_var = Variable()
+        app.refresh_targets = Mock()
+        app._poll_controller()
+        app._poll_controller()
+        app.refresh_targets.assert_called_once_with()
+        self.assertEqual(app.status_detail_var.get(), 'Original settings restored.')
+
+    def test_finished_chain_reselects_actual_stream_but_not_reused_identity(self):
+        stream = dict(hwnd=2, pid=3, created=4, exe=r'C:\Apps\chiaki.exe', width=1920, height=1080)
+        for restored, expected in ((dict(stream, width=2400, height=1350), 'stream'),
+                                   (dict(stream, created=5), '')):
+            with self.subTest(restored=restored):
+                app = DailyApp.__new__(DailyApp)
+                app._last_state, app._closing = 'running', False
+                app.root = SimpleNamespace(after=Mock())
+                app.controller = SimpleNamespace(busy=False, poll=lambda: dict(
+                    chain=True, chain_target=stream, state='stopped', detail='Restored.'))
+                app._set_status = lambda **kwargs: setattr(app, '_last_state', kwargs['state'])
+                app.status_detail_var, app.target_var = Variable(), Variable()
+                app.target_by_display = {'stream': restored}
+                app.refresh_targets, app._refresh_mask_status = Mock(), Mock()
+                app._poll_controller()
+                self.assertEqual(app.target_var.get(), expected)
+                self.assertEqual(app._refresh_mask_status.call_count, int(bool(expected)))
+
     def test_flow_height_labels_keep_width_values_and_selection(self):
         app = DailyApp.__new__(DailyApp)
         app.ttk = SimpleNamespace(Frame=Mock(), Radiobutton=Mock())
@@ -115,7 +203,7 @@ class CloseRecoveryTests(unittest.TestCase):
         states = {}
         for name in ('target_combo', 'mode_combo', 'refresh_button', 'save_button',
                      'restore_button', 'hdr_check', 'hdr_mapping_combo', 'hdr_queued_check', 'mask_check', 'mask_combo',
-                     'edit_mask_button', 'start_button', 'stop_button', 'open_run_button'):
+                     'edit_mask_button', 'start_button', 'chain_button', 'stop_button', 'open_run_button'):
             setattr(app, name, SimpleNamespace(configure=lambda name=name, **kwargs: states.update({name: kwargs['state']})))
         for name in ('nr_height_frame', 'flow_width_frame', 'flow_grid_frame', 'flow_preset_frame'):
             setattr(app, name, SimpleNamespace(winfo_children=lambda: []))
@@ -125,6 +213,7 @@ class CloseRecoveryTests(unittest.TestCase):
         app.hdr_mapping_var.set('Color-preserving')
         app.target_var = Variable()
         app.target_by_display = {}
+        app.targets = [dict(exe='chiaki.exe')]
         app._mask_ready = True
         app._run_path = None
         app._last_state = 'idle'
@@ -140,6 +229,7 @@ class CloseRecoveryTests(unittest.TestCase):
             self.assertEqual(states['hdr_check'], expected)
             self.assertEqual(states['hdr_mapping_combo'], mapping_expected)
             self.assertEqual(states['hdr_queued_check'], 'normal' if mapping_expected=='readonly' else 'disabled')
+            self.assertEqual(states['chain_button'], 'disabled' if busy or closing else 'normal')
         app._controller_busy=lambda: False
         app._closing=False
         app.hdr_mapping_var.set('Legacy')
