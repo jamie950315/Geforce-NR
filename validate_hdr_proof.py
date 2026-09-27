@@ -14,6 +14,9 @@ def validate(run):
     assert manifest['hdr'] is True and manifest['hdr_proof'] is True
     proof = run/'hdr-proof'
     meta = json.loads((proof/'proof.json').read_text())
+    mapping = manifest.get('hdr_mapping','legacy')
+    assert mapping in ('legacy','color-preserving')
+    assert meta.get('mapping','legacy') == mapping
     for key in ('hwnd','pid','capture_format','output_format'):
         assert type(meta[key]) is int and meta[key] > 0, key
     assert hashlib.sha256((run/'manifest.json').read_bytes()).hexdigest() == meta['manifest_sha256']
@@ -40,16 +43,34 @@ def validate(run):
     a, b = read('proxy-in.rgba','u1')/255, read('proxy-out.rgba','u1')/255
     linear = lambda x: np.where(x <= .04045, x/12.92, ((x+.055)/1.055)**2.4)
     original = source[:,:,:3]
-    scale = meta['white'] + np.maximum(0, original.max(axis=2,keepdims=True))
-    expected = original if meta['bypass'] else original + scale*np.clip(linear(b[:,:,:3])-linear(a[:,:,:3]),-.25,.25)
+    gamut = original
+    delta = linear(b[:,:,:3])-linear(a[:,:,:3])
+    if mapping == 'color-preserving':
+        y = np.sum(original*np.array([.2126,.7152,.0722],dtype=np.float32),axis=2,keepdims=True)
+        low = original.min(axis=2,keepdims=True)
+        compression = np.divide(y,y-low,out=np.ones_like(y),where=(low<0)&(y>0))
+        gamut = np.where(low>=0,original,np.where(y>0,np.maximum(y+(original-y)*compression,0),0))
+        peak = np.max(np.abs(delta),axis=2,keepdims=True)
+        limited = delta*np.minimum(1,.25/np.maximum(peak,.25))
+        proxy_linear = gamut/(meta['white']+np.maximum(0,gamut.max(axis=2,keepdims=True)))
+        proxy_encoded = np.where(proxy_linear<=.0031308,12.92*proxy_linear,
+                                 1.055*np.maximum(proxy_linear,0)**(1/2.4)-.055)
+        proxy_error = np.max(np.abs(np.round(proxy_encoded*255)-np.round(a[:,:,:3]*255)))
+        assert proxy_error <= 1, f'HDR proxy encoding mismatch: {proxy_error} codes'
+    else:
+        limited = np.clip(delta,-.25,.25)
+    scale = meta['white'] + np.maximum(0, gamut.max(axis=2,keepdims=True))
+    expected = original if meta['bypass'] else original + scale*limited
     expected = np.clip(expected,-65504,65504)
     tolerance = np.maximum(.002, np.abs(expected)*.0015)
     error = np.abs(output[:,:,:3]-expected)
     assert np.all(error <= tolerance), f'HDR composition mismatch: max error {error.max()}'
     assert np.all(output[:,:,3] == 1)
-    result = dict(valid=True, timing_evidence=False, width=w,height=h, source_max=float(original.max()),
+    result = dict(valid=True, mapping=mapping, timing_evidence=False, width=w,height=h, source_max=float(original.max()),
         output_max=float(output[:,:,:3].max()), max_error=float(error.max()), hashes=hashes,
         source_above_sdr_white=int(np.any(original > meta['white'],axis=2).sum()))
+    if mapping == 'color-preserving':
+        result['proxy_max_code_error'] = float(proxy_error)
     if meta['bypass']:
         assert np.array_equal(original,output[:,:,:3]), 'HDR bypass did not preserve source exactly'
         result['bypass_exact'] = True

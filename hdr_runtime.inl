@@ -2,6 +2,9 @@
 #include <cmath>
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
+#ifndef GFN_HDR_MAPPING
+#define GFN_HDR_MAPPING "legacy"
+#endif
 
 static bool GfnHdrHashRows(const BYTE *pixels, const D3D12_PLACED_SUBRESOURCE_FOOTPRINT &fp,
                           UINT rows, UINT64 rowbytes, char output[65]) {
@@ -41,7 +44,7 @@ static bool GfnHdrStatus(UINT w, UINT height) {
     const std::wstring temporary = std::wstring(path) + L".tmp";
     FILE *file = nullptr;
     if (_wfopen_s(&file, temporary.c_str(), L"wb") || !file) return false;
-    const int count = fprintf(file, "{\"active\":true,\"capture\":\"rgba16f\","
+    const int count = fprintf(file, "{\"active\":true,\"mapping\":\"" GFN_HDR_MAPPING "\",\"capture\":\"rgba16f\","
         "\"output\":\"rgba16f\",\"color_space\":\"scRGB-linear-BT709\","
         "\"neural_input\":\"SDR-proxy\",\"white\":%.9g,\"width\":%u,\"height\":%u}",
         g_hdr_frame_white, w, height);
@@ -129,7 +132,7 @@ static bool GfnHdrProof(VideoState &v, bool bypass) {
     const std::wstring path = std::wstring(folder)+L"\\proof.json";
     if (_wfopen_s(&meta,path.c_str(),L"wb") || !meta) return false;
     const auto desc = g_hdr_output->GetDesc();
-    fprintf(meta,"{\"width\":%u,\"height\":%u,\"white\":%.9g,\"bypass\":%s,"
+    fprintf(meta,"{\"mapping\":\"" GFN_HDR_MAPPING "\",\"width\":%u,\"height\":%u,\"white\":%.9g,\"bypass\":%s,"
         "\"fence\":%llu,\"capture_format\":%u,\"output_format\":%u,\"timing_evidence\":false,"
         "\"manifest_sha256\":\"%s\",\"hwnd\":%llu,\"pid\":%lu,\"generation\":%llu,\"capture\":%llu,\"source_qpc\":%llu,"
         "\"sha256\":{\"source.fp16\":\"%s\",\"output.fp16\":\"%s\",\"proxy-in.rgba\":\"%s\",\"proxy-out.rgba\":\"%s\"}}",

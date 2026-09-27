@@ -85,6 +85,16 @@ and full-mask cores. The mask preview and ordinary PPM exports remain SDR.
 Only `color.json` after successful HDR presentation confirms the active path.
 `--hdr-proof` is a one-time same-frame FP16/proxy readback for
 `validate_hdr_proof.py`, never timing or physical-display luminance evidence.
+`hdr_mapping` selects `legacy` (`native-hdr`) or `color-preserving`
+(`native-hdr-color`). Existing preferences migrate to Legacy; new/recommended
+preferences choose Color-preserving with HDR still off. Stage the new build with
+`stage_hdr.py --mapping color-preserving`; preserve both binaries. It compresses
+negative RGB toward neutral with positive luminance preserved, and scales large
+NR edits uniformly rather than clipping channels independently. It retains the
+existing highlight curve and does not infer engine exposure from screenshots.
+Native proof metadata binds the mapping; the new validator checks proxy encoding
+as well as FP16 composition. Do not describe this as a universal perceptual-quality
+or temporal-stability improvement.
 One observed Cyberpunk exit kept the GFN HWND/title but changed geometry from
 2560x1440 to 2578x1398 and showed Steam, so HWND identity alone does not mark
 the end of a game session. A size change in daily mode now fails closed.

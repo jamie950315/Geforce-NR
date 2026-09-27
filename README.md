@@ -136,16 +136,45 @@ residual zero, preserving the original HDR pixels; feathered regions blend
 the proxy edit before HDR composition.
 
 The panel reports **HDR scRGB active** only after the worker successfully
-presents HDR. Existing preferences migrate to HDR-off without changing mask
-choices. **Restore recommended** also selects SDR. The default SDR worker and
+presents HDR. Preferences created before HDR support gain HDR-off without changing
+mask choices; existing HDR selections are preserved. **Restore recommended** also selects SDR. The default SDR worker and
 original Core/Lab files are unchanged.
 
-Stage the optional HDR worker on the existing Windows deployment with
-`python stage_hdr.py`. It requires the attested `native-repaired` source tree,
-runtime, build record, and `Build-Repaired.cmd`; it refuses to overwrite an
-existing `native-hdr`. The build emits `hdr-build.json` with source and binary
+**HDR mapping** selects two explicitly separate builds:
+
+- **Legacy** keeps the original proxy and per-channel edit limit. Existing
+  preferences retain this mode when the mapping field is added.
+- **Color-preserving** compresses negative scRGB channels toward equal-RGB
+  neutral with one scale, preserving positive luminance and the RGB direction
+  away from neutral before proxy quantization. Nonpositive-luminance colors
+  become black only in the model proxy; the original signed HDR frame is kept.
+  Large neural edits are limited by one scale instead of clipping each channel
+  separately. The resolve uses the same compressed-proxy scale. Bypass, zero
+  edits, and full mask cores still return the original HDR RGB values.
+
+Color-preserving is the recommended mapping for new preferences and **Restore
+recommended**, while HDR itself remains off by default. Existing saved choices
+are not silently switched. Select this mapping explicitly to try it. It fixes
+specific color-transform invariants, not every source of NR color shifts or
+temporal artifacts; it does not recover the game's exposure or change tone curves.
+The existing HDR highlight curve is retained: in a fixed 1x–64x white ramp,
+the tested Neutwo alternative supplied fewer distinct 8-bit codes and reached
+code 255 earlier. That comparison is about proxy quantization, not a general
+perceptual ranking of tone mappers.
+
+The implementation is independently written; research references include the
+[OptiScaler NR color shader](https://github.com/wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass/blob/main/OptiScaler/shaders/dlssnr/precompile/dlssnr.hlsl).
+`hdr_color_reference.py` documents the scalar equations used by the focused tests.
+
+Stage Legacy with `python stage_hdr.py`, or Color-preserving with
+`python stage_hdr.py --mapping color-preserving`. The latter creates
+`native-hdr-color` and `hdr-color-build.json` without replacing `native-hdr`.
+Both require the attested `native-repaired` source tree,
+runtime, build record, and `Build-Repaired.cmd`; it refuses to overwrite its
+existing destination. The Legacy build emits `hdr-build.json` with source and binary
 hashes. A missing or altered HDR build blocks HDR Start but does not block SDR.
-The CLI equivalent is `--hdr`. `--hdr-proof` additionally writes one same-frame
+The CLI equivalent is `--hdr --hdr-mapping color-preserving` (the CLI mapping
+defaults to Legacy). `--hdr-proof` additionally writes one same-frame
 FP16 source/output and SDR-proxy readback under the run directory. Validate it
 with `python validate_hdr_proof.py runs/<name>` (NumPy required). These diagnostic
 readbacks are not timing evidence. Ordinary PPM snapshots remain SDR proxies,
@@ -161,6 +190,10 @@ chiaki-ng / PS5 / GTA V HDR run also confirmed FP16 capture/presentation, active
 NR and hardware flow, 2560x1440 output with 1280x720 processing, and a clean stop.
 These checks establish the software color/identity contract, not measured panel
 luminance, broad perceptual quality, ghost-free motion, or stable 120 FPS.
+Color-preserving additionally passed all three GPU modes, with proxy encoding
+within one 8-bit code of the reference and exact protected HDR cores. Validation
+binds the selected mapping to native metadata, so a Legacy readback cannot prove
+Color-preserving behavior.
 
 Existing pre-mask-selector preferences migrate once to mask-off while preserving
 processing settings, with a local `daily-settings-before-optional-mask.json`

@@ -6,11 +6,17 @@ from pathlib import Path
 import subprocess
 
 
-def verify_hdr_build(root):
+def verify_hdr_build(root, mapping='legacy'):
     root = Path(root)
-    native = root/'native-hdr'
+    kinds = {'legacy':'hdr', 'color-preserving':'hdr-color'}
+    if mapping not in kinds:
+        raise ValueError('Unknown HDR mapping')
+    kind = kinds[mapping]
+    native = root/('native-'+kind)
     try:
-        build = json.loads((root/'hdr-build.json').read_text(encoding='utf-8-sig'))
+        build = json.loads((root/(kind+'-build.json')).read_text(encoding='utf-8-sig'))
+        if build.get('mapping','legacy') != mapping:
+            raise RuntimeError('HDR build mapping mismatch')
         for name, key in (('nvngx.dll', 'worker_sha256'), ('nvngx_dlssnr.dll', 'runtime_sha256')):
             actual = hashlib.sha256((native/name).read_bytes()).hexdigest()
             if actual != build[key]:
@@ -20,8 +26,8 @@ def verify_hdr_build(root):
     return native, build
 
 
-def require_hdr_display(root, hwnd):
-    native, _ = verify_hdr_build(root)
+def require_hdr_display(root, hwnd, mapping='legacy'):
+    native, _ = verify_hdr_build(root, mapping)
     result = subprocess.run([str(native/'nvngx.dll'), '--hdr-display', str(hwnd)],
         capture_output=True, text=True, timeout=10,
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))

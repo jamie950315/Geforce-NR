@@ -61,6 +61,23 @@ class HdrProofTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate(self.run)
 
+    def test_mapping_mismatch_is_rejected(self):
+        self.meta['mapping'] = 'color-preserving'
+        self.write_json(self.proof/'proof.json',self.meta)
+        with self.assertRaises(AssertionError):
+            validate(self.run)
+
+    def test_color_mapping_checks_proxy_encoding_even_in_bypass(self):
+        self.manifest['hdr_mapping'] = 'color-preserving'
+        self.write_json(self.run/'manifest.json',self.manifest)
+        self.meta.update(mapping='color-preserving',
+            manifest_sha256=hashlib.sha256((self.run/'manifest.json').read_bytes()).hexdigest())
+        self.write_json(self.proof/'proof.json',self.meta)
+        # This fixture's arbitrary proxy matches the hashes but not the new
+        # encoding function. Numerical HDR bypass equality alone is insufficient.
+        with self.assertRaisesRegex(AssertionError,'proxy encoding mismatch'):
+            validate(self.run)
+
     def test_changed_raw_file_is_rejected(self):
         # Alter only alpha in a proxy: numerical bypass checks cannot detect it,
         # so this explicitly exercises the byte-integrity contract.

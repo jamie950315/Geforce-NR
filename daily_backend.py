@@ -10,10 +10,10 @@ import time
 import uuid
 from application_windows import enumerate_application_windows
 
-DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False)
+DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving')
 CHOICES = dict(nr_height=(720, 900, 1080), flow_width=(320, 640, 960, 1280),
                flow_grid=(2, 4), flow_preset=('fast', 'medium', 'slow'), mode=('guard', 'nr', 'bypass'),
-               mask_profile=('custom', 'cyberpunk'), hdr=(False, True))
+               mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'))
 
 
 def validated(value):
@@ -39,6 +39,8 @@ def read_json(path):
 
 
 def migrate_settings(value):
+    if isinstance(value, dict) and 'hdr_mapping' not in value:
+        value = dict(value, hdr_mapping='legacy')
     if isinstance(value, dict) and 'hdr' not in value:
         value = dict(value, hdr=False)
     if isinstance(value, dict) and set(value) == set(DEFAULTS)-{'mask_profile'}:
@@ -57,7 +59,8 @@ class DailyController:
             previous = read_json(self.preference_file)
             self.settings = migrate_settings(previous)
             if self.settings != previous:
-                backup = self.root/('daily-settings-before-hdr.json' if 'mask_profile' in previous
+                backup = self.root/('daily-settings-before-hdr-color.json' if 'hdr' in previous
+                                    else 'daily-settings-before-hdr.json' if 'mask_profile' in previous
                                     else 'daily-settings-before-optional-mask.json')
                 if not backup.exists():
                     atomic_json(backup, previous)
@@ -182,7 +185,7 @@ class DailyController:
         current = self._current_target(target)
         if value['hdr']:
             from hdr_support import require_hdr_display
-            require_hdr_display(self.root, current['hwnd'])
+            require_hdr_display(self.root, current['hwnd'], value['hdr_mapping'])
         if value['mode'] == 'guard':
             from mask_profiles import build_mask, validate_mask
             if value['mask_profile'] == 'cyberpunk':
@@ -218,7 +221,7 @@ class DailyController:
         if value['mode'] == 'guard':
             args += ['--mask', str(mask)]
         if value['hdr']:
-            args += ['--hdr']
+            args += ['--hdr', '--hdr-mapping', value['hdr_mapping']]
         # This log is created outside the run, which the launcher creates exclusively.
         self.launch_log = self.root/'runs'/(name + '-launch.log')
         self.launch_log.parent.mkdir(exist_ok=True)
@@ -308,6 +311,7 @@ class DailyController:
                 hdr_status = ('HDR scRGB active' if self.busy and self.state == 'running' and color.get('active') is True
                               else 'HDR paused' if self.busy and self.state == 'suspended'
                               else 'HDR initializing' if self.busy else 'HDR stopped')
+                hdr_status += ' / '+manifest.get('hdr_mapping','legacy')
         return dict(state=self.state, detail=self.detail, end_reason=end_reason, hdr_status=hdr_status,
                     run=str(evidence) if evidence else None,
                     geometry=geometry, nr_confirmed=bool(processing and self.metrics.get('nr_confirmed')),

@@ -1,5 +1,6 @@
 """Build isolated, fail-closed HDR output from the attested repaired worker."""
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import shutil
@@ -16,7 +17,9 @@ def patch_once(source, old, new):
     return source.replace(old, new, 1)
 
 
-def patch_sources(files):
+def patch_sources(files, mapping='legacy'):
+    if mapping not in ('legacy', 'color-preserving'):
+        raise ValueError('Unknown HDR mapping')
     display = files['hdr_display.h']
     display = patch_once(display, 'bool enabled = false;', 'bool known = false;\n    bool enabled = false;')
     display = patch_once(display, '"NS_HDR"', '"GFN_NR_HDR"')
@@ -68,12 +71,28 @@ def patch_sources(files):
     hud = hud.replace('Source/result must be the same frame and SDR RGBA8.',
         'Source/result must be same-frame RGBA8 proxies; zero HDR residual preserves native FP16.')
     files['hud_guard.inl'] = hud
+    if mapping == 'color-preserving':
+        shader = files['hdr_shaders.h']
+        shader = patch_once(shader, '#pragma once', '#pragma once\n#include "hdr_color_math.h"')
+        tail = '"float Peak(float3 x) { return max(0, max(x.r, max(x.g, x.b))); }\\n"'
+        shader = patch_once(shader, tail, tail+' \\\n    GFN_HDR_COLOR_FUNCTIONS')
+        shader = patch_once(shader,
+            'if(isFloat) c=float4(ToSrgb(max(c.rgb,0)/(white+Peak(c.rgb))),1);',
+            'if(isFloat) { float3 gamut=ProxyGamut(c.rgb); c=float4(ToSrgb(gamut/(white+Peak(gamut))),1); }')
+        shader = patch_once(shader,
+            'original+(white+Peak(original))*clamp(b-a,-.25,.25)',
+            'original+(white+Peak(ProxyGamut(original)))*LimitEdit(b-a)')
+        files['hdr_shaders.h'] = shader
     return files
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--mapping', choices=['legacy','color-preserving'], default='legacy')
+    args = ap.parse_args()
     root = Path(__file__).resolve().parent
-    source, dest = root/'native-repaired', root/'native-hdr'
+    kind = 'hdr-color' if args.mapping == 'color-preserving' else 'hdr'
+    source, dest = root/'native-repaired', root/('native-'+kind)
     if dest.exists():
         raise RuntimeError('Preserve the existing HDR build; move it to a versioned backup before rebuilding')
     repaired = json.loads((root/'repaired-build.json').read_text(encoding='utf-8-sig'))
@@ -83,22 +102,25 @@ def main():
             raise RuntimeError('Repaired source/build integrity mismatch: '+name)
     names = ('dlss5-feed-host64.cpp','hdr_display.h','hdr_present.inl','hdr_shaders.h','hud_guard.inl')
     inputs = {name:digest(source/name) for name in names}
-    patched = patch_sources({name:(source/name).read_text(encoding='utf-8-sig') for name in names})
+    patched = patch_sources({name:(source/name).read_text(encoding='utf-8-sig') for name in names}, args.mapping)
     shutil.copytree(source,dest,ignore=shutil.ignore_patterns('*.obj','*.pdb','*.ilk','*.exp','*.log'))
     for name, text in patched.items():
         (dest/name).write_text(text,encoding='utf-8-sig')
     shutil.copy2(root/'hdr_runtime.inl',dest/'hdr_runtime.inl')
-    command = root/'Build-HDR.cmd'
+    if args.mapping == 'color-preserving':
+        shutil.copy2(root/'hdr_color_math.h',dest/'hdr_color_math.h')
+    command = root/('Build-'+kind.upper()+'.cmd')
     command.write_text((root/'Build-Repaired.cmd').read_text().replace(str(source),str(dest)),encoding='utf-8')
-    with (root/'hdr-build.log').open('wb') as log:
+    with (root/(kind+'-build.log')).open('wb') as log:
         result = subprocess.run(['cmd.exe','/d','/c',str(command)],stdout=log,stderr=subprocess.STDOUT,timeout=180)
     if result.returncode:
         raise RuntimeError('HDR build failed; inspect hdr-build.log')
-    record = dict(worker_sha256=digest(dest/'nvngx.dll'),runtime_sha256=digest(dest/'nvngx_dlssnr.dll'),
+    extra = ('hdr_color_math.h',) if args.mapping == 'color-preserving' else ()
+    record = dict(mapping=args.mapping,worker_sha256=digest(dest/'nvngx.dll'),runtime_sha256=digest(dest/'nvngx_dlssnr.dll'),
         source_sha256=digest(dest/'dlss5-feed-host64.cpp'),inputs=inputs,
-        patched={name:digest(dest/name) for name in (*names,'hdr_runtime.inl')},
+        patched={name:digest(dest/name) for name in (*names,'hdr_runtime.inl',*extra)},
         staging_sha256=digest(Path(__file__)))
-    (root/'hdr-build.json').write_text(json.dumps(record,indent=2),encoding='utf-8')
+    (root/(kind+'-build.json')).write_text(json.dumps(record,indent=2),encoding='utf-8')
 
 
 if __name__ == '__main__':

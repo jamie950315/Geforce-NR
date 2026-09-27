@@ -32,6 +32,7 @@ RECOMMENDED_SETTINGS: dict[str, Any] = {
     "mode": "nr",
     "mask_profile": "custom",
     "hdr": False,
+    "hdr_mapping": "color-preserving",
 }
 
 MODE_LABELS = {
@@ -40,6 +41,7 @@ MODE_LABELS = {
 }
 MODE_VALUES_TO_LABELS = {value: label for label, value in MODE_LABELS.items()}
 MASK_LABELS = {'Custom regions (selected window)': 'custom', 'Cyberpunk 2077 preset (1440p)': 'cyberpunk'}
+HDR_MAPPING_LABELS = {'Color-preserving': 'color-preserving', 'Legacy': 'legacy'}
 
 
 def fit_window_bounds(requested, work_area, decoration=(0, 0)):
@@ -286,6 +288,7 @@ class DailyApp:
         self.mode_var = self.tk.StringVar()
         self.mask_enabled_var = self.tk.BooleanVar(value=False)
         self.hdr_var = self.tk.BooleanVar(value=False)
+        self.hdr_mapping_var = self.tk.StringVar()
         self.mask_profile_var = self.tk.StringVar()
         self.mask_summary_var = self.tk.StringVar()
         self.nr_height_var = self.tk.IntVar()
@@ -351,7 +354,7 @@ class DailyApp:
             variable=self.mask_enabled_var, command=self._refresh_mask_status)
         self.mask_check.grid(row=2, column=0, sticky='w', pady=(10, 6))
         self.hdr_check = self.ttk.Checkbutton(controls, text='HDR output (Windows HDR required)',
-            variable=self.hdr_var)
+            variable=self.hdr_var, command=self._sync_controls)
         self.hdr_check.grid(row=2, column=1, columnspan=2, sticky='w', pady=(10, 6))
         self.mask_combo = self.ttk.Combobox(controls, textvariable=self.mask_profile_var,
             values=tuple(MASK_LABELS), state='readonly')
@@ -382,8 +385,16 @@ class DailyApp:
         self.ttk.Label(advanced, text="Flow preset", style="Muted.TLabel").grid(row=7, column=0, sticky="w", pady=(8, 0))
         self.flow_preset_frame = self._radio_row(advanced, 8, self.flow_preset_var, ("fast", "medium", "slow"), title_case=True)
 
+        hdr_mapping = self.ttk.Frame(advanced, style="Panel.TFrame")
+        hdr_mapping.grid(row=9, column=0, sticky="ew", pady=(8, 0))
+        hdr_mapping.columnconfigure(1, weight=1)
+        self.ttk.Label(hdr_mapping, text="HDR mapping", style="Muted.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.hdr_mapping_combo = self.ttk.Combobox(hdr_mapping, textvariable=self.hdr_mapping_var,
+            values=tuple(HDR_MAPPING_LABELS), state="readonly", width=16)
+        self.hdr_mapping_combo.grid(row=0, column=1, sticky="ew")
+
         preference_actions = self.ttk.Frame(advanced, style="Panel.TFrame")
-        preference_actions.grid(row=9, column=0, sticky="ew", pady=(13, 0))
+        preference_actions.grid(row=10, column=0, sticky="ew", pady=(13, 0))
         preference_actions.columnconfigure(0, weight=1)
         preference_actions.columnconfigure(1, weight=1)
         self.save_button = self.ttk.Button(preference_actions, text="Save preferences", command=self.save_preferences)
@@ -450,7 +461,10 @@ class DailyApp:
     def _load_settings(self) -> None:
         saved = dict(RECOMMENDED_SETTINGS)
         try:
-            saved.update(self.controller.settings or {})
+            existing = dict(self.controller.settings or {})
+            if existing:
+                existing.setdefault("hdr_mapping", "legacy")
+            saved.update(existing)
         except Exception:
             _write_error_log("Failed to read saved UI settings")
         self._apply_settings_to_form(saved)
@@ -464,6 +478,8 @@ class DailyApp:
             mode = "nr"
         self.mode_var.set(MODE_VALUES_TO_LABELS[mode])
         self.hdr_var.set(settings.get("hdr", False))
+        self.hdr_mapping_var.set(next(label for label, value in HDR_MAPPING_LABELS.items()
+                                     if value == settings.get("hdr_mapping", "legacy")))
         self.mask_profile_var.set(next(label for label, value in MASK_LABELS.items()
                                       if value == settings.get('mask_profile', 'custom')))
         self.nr_height_var.set(settings.get("nr_height", 720))
@@ -481,6 +497,7 @@ class DailyApp:
                      ('guard' if self.mask_enabled_var.get() else 'nr')),
             "mask_profile": MASK_LABELS[self.mask_profile_var.get()],
             "hdr": bool(self.hdr_var.get()),
+            "hdr_mapping": HDR_MAPPING_LABELS[self.hdr_mapping_var.get()],
         }
 
     def edit_mask(self) -> None:
@@ -692,6 +709,7 @@ class DailyApp:
         self.save_button.configure(state="disabled" if busy or self._closing else "normal")
         self.restore_button.configure(state="disabled" if busy or self._closing else "normal")
         self.hdr_check.configure(state="disabled" if busy or self._closing else "normal")
+        self.hdr_mapping_combo.configure(state="readonly" if self.hdr_var.get() and not busy and not self._closing else "disabled")
         editable = not busy and not self._closing and MODE_LABELS.get(self.mode_var.get()) != 'bypass'
         self.mask_check.configure(state='normal' if editable else 'disabled')
         self.mask_combo.configure(state='readonly' if editable else 'disabled')

@@ -115,6 +115,7 @@ def main():
     ap.add_argument('--live-pair-worker', action='store_true')
     ap.add_argument('--daily', action='store_true')
     ap.add_argument('--hdr', action='store_true', help='Require Windows HDR and preserve FP16 scRGB output')
+    ap.add_argument('--hdr-mapping', choices=['legacy','color-preserving'], default='legacy')
     ap.add_argument('--hdr-proof', action='store_true', help='One local FP16 readback; not timing evidence')
     ap.add_argument('--owner-pid', type=int)
     ap.add_argument('--owner-created', type=int)
@@ -149,7 +150,7 @@ def main():
     if a.overlay_alpha != 255 and not a.fixed_worker:
         raise ValueError('Opacity experiment requires the repaired diagnostic worker')
     if not a.original_worker:
-        kind = 'hdr' if a.hdr else 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
+        kind = ('hdr-color' if a.hdr_mapping == 'color-preserving' else 'hdr') if a.hdr else 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
         native = ROOT / ('native-' + kind)
         build = load(ROOT / (kind + '-build.json'))
         if digest(native/'nvngx.dll') != build['worker_sha256'] or digest(native/'nvngx_dlssnr.dll') != integrity['runtime_sha256']:
@@ -171,7 +172,7 @@ def main():
     hdr_display = None
     if a.hdr:
         from hdr_support import require_hdr_display
-        hdr_display = require_hdr_display(ROOT, target.hwnd)
+        hdr_display = require_hdr_display(ROOT, target.hwnd, a.hdr_mapping)
     if a.daily:
         actual = target.to_dict()
         if ((actual['pid'], actual['created'], actual['title']) !=
@@ -220,7 +221,7 @@ def main():
                         flow_width=a.flow_width, flow_grid=a.flow_grid, flow_preset=a.flow_preset)
     atomic_json(run / 'manifest.json', dict(target=target.to_dict(), settings=settings.to_dict(),
                 mode=a.mode, mask=mask, daily=a.daily, hdr=a.hdr, hdr_display=hdr_display,
-                hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof,
+                hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof, hdr_mapping=a.hdr_mapping,
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
                 dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py', LAB / 'gfn_core/wire.py')}))

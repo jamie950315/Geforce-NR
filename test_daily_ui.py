@@ -19,7 +19,7 @@ class Variable:
 class CloseRecoveryTests(unittest.TestCase):
     def test_hdr_preference_round_trip_and_legacy_default(self):
         app = DailyApp.__new__(DailyApp)
-        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'nr_height',
+        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'nr_height',
                      'flow_width', 'flow_grid', 'flow_preset'):
             setattr(app, name + '_var', Variable())
         for saved, expected in (({}, False), ({'hdr': True}, True),
@@ -27,6 +27,23 @@ class CloseRecoveryTests(unittest.TestCase):
             with self.subTest(saved=saved):
                 app._apply_settings_to_form(saved)
                 self.assertIs(app._settings_from_form()['hdr'], expected)
+                self.assertEqual(app._settings_from_form()['hdr_mapping'], saved.get('hdr_mapping', 'legacy'))
+        for mapping in ('color-preserving', 'legacy'):
+            app._apply_settings_to_form(dict(RECOMMENDED_SETTINGS, hdr=True, hdr_mapping=mapping))
+            self.assertEqual(app._settings_from_form()['hdr_mapping'], mapping)
+            self.assertTrue(app._settings_from_form()['hdr'])
+
+    def test_loading_existing_preferences_preserves_legacy_mapping(self):
+        app = DailyApp.__new__(DailyApp)
+        loaded = []
+        app._apply_settings_to_form = loaded.append
+        old = dict(RECOMMENDED_SETTINGS, hdr=True)
+        old.pop('hdr_mapping')
+        for settings, expected in ((old, 'legacy'), (RECOMMENDED_SETTINGS, 'color-preserving'),
+                                   ({}, 'color-preserving')):
+            app.controller = SimpleNamespace(settings=settings)
+            app._load_settings()
+            self.assertEqual(loaded[-1]['hdr_mapping'], expected)
 
     def test_poll_displays_reported_hdr_status_and_legacy_sdr(self):
         app = DailyApp.__new__(DailyApp)
@@ -45,23 +62,29 @@ class CloseRecoveryTests(unittest.TestCase):
         app = DailyApp.__new__(DailyApp)
         states = {}
         for name in ('target_combo', 'mode_combo', 'refresh_button', 'save_button',
-                     'restore_button', 'hdr_check', 'mask_check', 'mask_combo',
+                     'restore_button', 'hdr_check', 'hdr_mapping_combo', 'mask_check', 'mask_combo',
                      'edit_mask_button', 'start_button', 'stop_button', 'open_run_button'):
             setattr(app, name, SimpleNamespace(configure=lambda name=name, **kwargs: states.update({name: kwargs['state']})))
         for name in ('nr_height_frame', 'flow_width_frame', 'flow_grid_frame', 'flow_preset_frame'):
             setattr(app, name, SimpleNamespace(winfo_children=lambda: []))
         app.mode_var = Variable()
+        app.hdr_var = Variable()
         app.target_var = Variable()
         app.target_by_display = {}
         app._mask_ready = True
         app._run_path = None
         app._last_state = 'idle'
-        for busy, closing, expected in ((False, False, 'normal'), (True, False, 'disabled'),
-                                        (False, True, 'disabled')):
+        for busy, closing, hdr, expected, mapping_expected in (
+                (False, False, False, 'normal', 'disabled'),
+                (False, False, True, 'normal', 'readonly'),
+                (True, False, True, 'disabled', 'disabled'),
+                (False, True, True, 'disabled', 'disabled')):
             app._controller_busy = lambda: busy
             app._closing = closing
+            app.hdr_var.set(hdr)
             app._sync_controls()
             self.assertEqual(states['hdr_check'], expected)
+            self.assertEqual(states['hdr_mapping_combo'], mapping_expected)
 
     def test_new_list_requires_explicit_selection_and_shows_executable(self):
         app = DailyApp.__new__(DailyApp)
