@@ -309,8 +309,21 @@ and game-image artifacts remain local and excluded from this repository.
 
 ### Opt-in higher-resolution HDR experiments
 
-The daily panel and saved preferences are unchanged. Diagnostic CLI runs can
-select a separately attested queued HDR worker:
+The daily panel exposes **Queued HDR + capture (experimental)** under Advanced
+processing. Enable HDR output, select **Color-preserving**, then enable this
+option. For the measured higher-resolution configuration, select NR input height
+**900**, flow width **1280**, grid **G2**, and preset **Fast**, then Start.
+The option launches both queue optimizations together and checks the exact
+combined build before saving Start preferences. A missing/altered build blocks
+Start with an error; it never silently selects the old worker. Status includes
+`queued HDR + capture` for the selected run.
+
+The option defaults to off; existing preferences gain `hdr_queued=false` without
+changing their other choices. Switching HDR off or choosing Legacy clears the
+queue option. Save preferences persists the selection. Restore recommended keeps
+NR720 and HDR/queue off. This is not a stable-120 guarantee for arbitrary sources.
+
+Diagnostic CLI runs can also select a separately attested queued HDR worker:
 
 ```powershell
 python stage_hdr.py --mapping color-preserving --queued

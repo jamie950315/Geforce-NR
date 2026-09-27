@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -9,6 +10,61 @@ from daily_backend import DEFAULTS, DailyController, atomic_json, validated, mig
 
 
 class DailyTests(unittest.TestCase):
+    def test_queued_preference_migration_preserves_choices_and_backs_up(self):
+        old = dict(DEFAULTS, hdr=True, hdr_mapping='legacy', nr_height=1080, mode='guard')
+        old.pop('hdr_queued')
+        expected = dict(old, hdr_queued=False)
+        self.assertEqual(migrate_settings(old), expected)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            atomic_json(root/'daily-settings.json', old)
+            with patch.dict('sys.modules', {'gfn_core.windows':SimpleNamespace(Win32=lambda: Mock())}), \
+                 patch.object(sys, 'path', list(sys.path)):
+                c = DailyController(root)
+            self.assertEqual(c.settings, expected)
+            self.assertEqual(json.loads((root/'daily-settings-before-hdr-queued.json').read_text()), old)
+            self.assertEqual(json.loads((root/'daily-settings.json').read_text()), expected)
+
+    def test_queued_preference_requires_boolean_and_hdr_color_mapping(self):
+        for change in ({'hdr_queued':1}, {'hdr_queued':'true'}, {'hdr_queued':None},
+                       {'hdr_queued':True}, {'hdr_queued':True,'hdr':True,'hdr_mapping':'legacy'}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validated(dict(DEFAULTS, **change))
+        self.assertFalse(DEFAULTS['hdr_queued'])
+        self.assertTrue(validated(dict(DEFAULTS, hdr=True, hdr_queued=True))['hdr_queued'])
+
+    def test_queued_launch_preflights_and_passes_both_flags(self):
+        for queued in (False, True):
+            with self.subTest(queued=queued), tempfile.TemporaryDirectory() as folder:
+                c = DailyController.__new__(DailyController)
+                c.root = Path(folder)/'isolated'
+                c.root.mkdir()
+                c.preference_file = c.root/'daily-settings.json'
+                c.process = None
+                target = dict(hwnd=123, pid=456, created=789, title='Replay', width=2560, height=1440)
+                c._current_target = lambda _: target
+                c.win = SimpleNamespace(identity=lambda _: ('python', 10), u=SimpleNamespace(SetForegroundWindow=Mock(return_value=True)))
+                with patch('hdr_support.require_hdr_display') as preflight, patch('daily_backend.subprocess.Popen') as launch:
+                    c.start(target, dict(DEFAULTS, hdr=True, hdr_queued=queued))
+                preflight.assert_called_once_with(c.root, 123, 'color-preserving', queued=queued, capture_queued=queued)
+                args = launch.call_args.args[0]
+                self.assertIn('--hdr', args)
+                self.assertEqual('--queued-hdr' in args, queued)
+                self.assertEqual('--capture-queued-hdr' in args, queued)
+                self.assertEqual(c.settings['hdr_queued'], queued)
+                self.assertEqual(args[args.index('--height')+1], '720')
+
+    def test_poll_identifies_combined_capture_queue_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            c = DailyController.__new__(DailyController)
+            c.run = Path(folder)
+            atomic_json(c.run/'manifest.json', dict(hdr=True, hdr_mapping='color-preserving', hdr_capture_queued=True))
+            c.process = None
+            c.metrics = {}
+            c.launch_log = None
+            c.state, c.detail = 'stopped', 'Done'
+            self.assertEqual(c.poll()['hdr_status'], 'HDR stopped / color-preserving / queued HDR + capture')
+
     def test_lists_general_application_targets(self):
         from application_windows import ApplicationTarget
         c = DailyController.__new__(DailyController)

@@ -33,6 +33,7 @@ RECOMMENDED_SETTINGS: dict[str, Any] = {
     "mask_profile": "custom",
     "hdr": False,
     "hdr_mapping": "color-preserving",
+    "hdr_queued": False,
 }
 
 MODE_LABELS = {
@@ -289,6 +290,7 @@ class DailyApp:
         self.mask_enabled_var = self.tk.BooleanVar(value=False)
         self.hdr_var = self.tk.BooleanVar(value=False)
         self.hdr_mapping_var = self.tk.StringVar()
+        self.hdr_queued_var = self.tk.BooleanVar(value=False)
         self.mask_profile_var = self.tk.StringVar()
         self.mask_summary_var = self.tk.StringVar()
         self.nr_height_var = self.tk.IntVar()
@@ -354,7 +356,7 @@ class DailyApp:
             variable=self.mask_enabled_var, command=self._refresh_mask_status)
         self.mask_check.grid(row=2, column=0, sticky='w', pady=(10, 6))
         self.hdr_check = self.ttk.Checkbutton(controls, text='HDR output (Windows HDR required)',
-            variable=self.hdr_var, command=self._sync_controls)
+            variable=self.hdr_var, command=self._hdr_options_changed)
         self.hdr_check.grid(row=2, column=1, columnspan=2, sticky='w', pady=(10, 6))
         self.mask_combo = self.ttk.Combobox(controls, textvariable=self.mask_profile_var,
             values=tuple(MASK_LABELS), state='readonly')
@@ -392,9 +394,16 @@ class DailyApp:
         self.hdr_mapping_combo = self.ttk.Combobox(hdr_mapping, textvariable=self.hdr_mapping_var,
             values=tuple(HDR_MAPPING_LABELS), state="readonly", width=16)
         self.hdr_mapping_combo.grid(row=0, column=1, sticky="ew")
+        self.hdr_mapping_combo.bind('<<ComboboxSelected>>', self._hdr_options_changed)
+        self.hdr_queued_check = self.ttk.Checkbutton(advanced,
+            text="Queued HDR + capture (experimental)", variable=self.hdr_queued_var)
+        self.hdr_queued_check.grid(row=10, column=0, sticky="w", pady=(10, 0))
+        self.ttk.Label(advanced, style="Muted.TLabel", wraplength=340, justify="left",
+            text="Requires HDR + Color-preserving. NR900 / flow1280 / G2 / Fast tested near 120 FPS; not guaranteed.").grid(
+                row=11, column=0, sticky="ew", pady=(3, 0))
 
         preference_actions = self.ttk.Frame(advanced, style="Panel.TFrame")
-        preference_actions.grid(row=10, column=0, sticky="ew", pady=(13, 0))
+        preference_actions.grid(row=12, column=0, sticky="ew", pady=(13, 0))
         preference_actions.columnconfigure(0, weight=1)
         preference_actions.columnconfigure(1, weight=1)
         self.save_button = self.ttk.Button(preference_actions, text="Save preferences", command=self.save_preferences)
@@ -480,6 +489,7 @@ class DailyApp:
         self.hdr_var.set(settings.get("hdr", False))
         self.hdr_mapping_var.set(next(label for label, value in HDR_MAPPING_LABELS.items()
                                      if value == settings.get("hdr_mapping", "legacy")))
+        self.hdr_queued_var.set(settings.get("hdr_queued", False))
         self.mask_profile_var.set(next(label for label, value in MASK_LABELS.items()
                                       if value == settings.get('mask_profile', 'custom')))
         self.nr_height_var.set(settings.get("nr_height", 720))
@@ -498,7 +508,13 @@ class DailyApp:
             "mask_profile": MASK_LABELS[self.mask_profile_var.get()],
             "hdr": bool(self.hdr_var.get()),
             "hdr_mapping": HDR_MAPPING_LABELS[self.hdr_mapping_var.get()],
+            "hdr_queued": bool(self.hdr_queued_var.get()),
         }
+
+    def _hdr_options_changed(self, _event=None) -> None:
+        if not self.hdr_var.get() or HDR_MAPPING_LABELS.get(self.hdr_mapping_var.get()) != 'color-preserving':
+            self.hdr_queued_var.set(False)
+        self._refresh_mask_status()
 
     def edit_mask(self) -> None:
         target = self.target_by_display.get(self.target_var.get())
@@ -710,6 +726,9 @@ class DailyApp:
         self.restore_button.configure(state="disabled" if busy or self._closing else "normal")
         self.hdr_check.configure(state="disabled" if busy or self._closing else "normal")
         self.hdr_mapping_combo.configure(state="readonly" if self.hdr_var.get() and not busy and not self._closing else "disabled")
+        self.hdr_queued_check.configure(state="normal" if self.hdr_var.get()
+            and HDR_MAPPING_LABELS.get(self.hdr_mapping_var.get()) == 'color-preserving'
+            and not busy and not self._closing else "disabled")
         editable = not busy and not self._closing and MODE_LABELS.get(self.mode_var.get()) != 'bypass'
         self.mask_check.configure(state='normal' if editable else 'disabled')
         self.mask_combo.configure(state='readonly' if editable else 'disabled')

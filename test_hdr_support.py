@@ -61,6 +61,19 @@ class HdrTests(unittest.TestCase):
             save.assert_not_called()
             launch.assert_not_called()
 
+    def test_missing_queued_build_does_not_save_or_launch(self):
+        c = DailyController.__new__(DailyController)
+        c.root = Path('.')
+        c.process = None
+        c._current_target = lambda _: dict(hwnd=123)
+        with patch('hdr_support.require_hdr_display', side_effect=RuntimeError('HDR build is unavailable')) as preflight, \
+             patch.object(c, 'save_settings') as save, patch('daily_backend.subprocess.Popen') as launch:
+            with self.assertRaisesRegex(RuntimeError, 'unavailable'):
+                c.start({}, dict(DEFAULTS, hdr=True, hdr_queued=True))
+            preflight.assert_called_once_with(c.root, 123, 'color-preserving', queued=True, capture_queued=True)
+            save.assert_not_called()
+            launch.assert_not_called()
+
     def test_patch_contract_rejects_missing_and_duplicate_anchors(self):
         for source in ('none', 'old old'):
             with self.assertRaisesRegex(RuntimeError, 'Ambiguous'):

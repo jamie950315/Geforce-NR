@@ -19,7 +19,7 @@ class Variable:
 class CloseRecoveryTests(unittest.TestCase):
     def test_hdr_preference_round_trip_and_legacy_default(self):
         app = DailyApp.__new__(DailyApp)
-        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'nr_height',
+        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'hdr_queued', 'nr_height',
                      'flow_width', 'flow_grid', 'flow_preset'):
             setattr(app, name + '_var', Variable())
         for saved, expected in (({}, False), ({'hdr': True}, True),
@@ -28,10 +28,28 @@ class CloseRecoveryTests(unittest.TestCase):
                 app._apply_settings_to_form(saved)
                 self.assertIs(app._settings_from_form()['hdr'], expected)
                 self.assertEqual(app._settings_from_form()['hdr_mapping'], saved.get('hdr_mapping', 'legacy'))
+                self.assertFalse(app._settings_from_form()['hdr_queued'])
         for mapping in ('color-preserving', 'legacy'):
             app._apply_settings_to_form(dict(RECOMMENDED_SETTINGS, hdr=True, hdr_mapping=mapping))
             self.assertEqual(app._settings_from_form()['hdr_mapping'], mapping)
             self.assertTrue(app._settings_from_form()['hdr'])
+        app._apply_settings_to_form(dict(RECOMMENDED_SETTINGS, hdr=True, hdr_queued=True, nr_height=900))
+        self.assertTrue(app._settings_from_form()['hdr_queued'])
+        self.assertEqual(app._settings_from_form()['nr_height'],900)
+
+    def test_incompatible_hdr_changes_explicitly_clear_queue_selection(self):
+        app = DailyApp.__new__(DailyApp)
+        app.hdr_var, app.hdr_mapping_var, app.hdr_queued_var = Variable(), Variable(), Variable()
+        calls=[]
+        app._refresh_mask_status=lambda: calls.append(True)
+        for hdr, mapping, expected in ((True,'Color-preserving',True), (True,'Legacy',False),
+                                       (False,'Color-preserving',False)):
+            app.hdr_var.set(hdr)
+            app.hdr_mapping_var.set(mapping)
+            app.hdr_queued_var.set(True)
+            app._hdr_options_changed()
+            self.assertIs(app.hdr_queued_var.get(),expected)
+        self.assertEqual(len(calls),3)
 
     def test_loading_existing_preferences_preserves_legacy_mapping(self):
         app = DailyApp.__new__(DailyApp)
@@ -62,13 +80,15 @@ class CloseRecoveryTests(unittest.TestCase):
         app = DailyApp.__new__(DailyApp)
         states = {}
         for name in ('target_combo', 'mode_combo', 'refresh_button', 'save_button',
-                     'restore_button', 'hdr_check', 'hdr_mapping_combo', 'mask_check', 'mask_combo',
+                     'restore_button', 'hdr_check', 'hdr_mapping_combo', 'hdr_queued_check', 'mask_check', 'mask_combo',
                      'edit_mask_button', 'start_button', 'stop_button', 'open_run_button'):
             setattr(app, name, SimpleNamespace(configure=lambda name=name, **kwargs: states.update({name: kwargs['state']})))
         for name in ('nr_height_frame', 'flow_width_frame', 'flow_grid_frame', 'flow_preset_frame'):
             setattr(app, name, SimpleNamespace(winfo_children=lambda: []))
         app.mode_var = Variable()
         app.hdr_var = Variable()
+        app.hdr_mapping_var = Variable()
+        app.hdr_mapping_var.set('Color-preserving')
         app.target_var = Variable()
         app.target_by_display = {}
         app._mask_ready = True
@@ -85,6 +105,12 @@ class CloseRecoveryTests(unittest.TestCase):
             app._sync_controls()
             self.assertEqual(states['hdr_check'], expected)
             self.assertEqual(states['hdr_mapping_combo'], mapping_expected)
+            self.assertEqual(states['hdr_queued_check'], 'normal' if mapping_expected=='readonly' else 'disabled')
+        app._controller_busy=lambda: False
+        app._closing=False
+        app.hdr_mapping_var.set('Legacy')
+        app._sync_controls()
+        self.assertEqual(states['hdr_queued_check'],'disabled')
 
     def test_new_list_requires_explicit_selection_and_shows_executable(self):
         app = DailyApp.__new__(DailyApp)

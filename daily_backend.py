@@ -10,10 +10,10 @@ import time
 import uuid
 from application_windows import enumerate_application_windows
 
-DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving')
+DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False)
 CHOICES = dict(nr_height=(720, 900, 1080), flow_width=(320, 640, 960, 1280),
                flow_grid=(2, 4), flow_preset=('fast', 'medium', 'slow'), mode=('guard', 'nr', 'bypass'),
-               mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'))
+               mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'), hdr_queued=(False, True))
 
 
 def validated(value):
@@ -22,6 +22,8 @@ def validated(value):
     for key, options in CHOICES.items():
         if type(value[key]) is not type(DEFAULTS[key]) or value[key] not in options:
             raise ValueError('Unsupported setting: ' + key)
+    if value['hdr_queued'] and (not value['hdr'] or value['hdr_mapping'] != 'color-preserving'):
+        raise ValueError('Queued HDR + capture requires HDR with color-preserving mapping')
     return dict(value)
 
 
@@ -39,6 +41,8 @@ def read_json(path):
 
 
 def migrate_settings(value):
+    if isinstance(value, dict) and 'hdr_queued' not in value:
+        value = dict(value, hdr_queued=False)
     if isinstance(value, dict) and 'hdr_mapping' not in value:
         value = dict(value, hdr_mapping='legacy')
     if isinstance(value, dict) and 'hdr' not in value:
@@ -59,7 +63,8 @@ class DailyController:
             previous = read_json(self.preference_file)
             self.settings = migrate_settings(previous)
             if self.settings != previous:
-                backup = self.root/('daily-settings-before-hdr-color.json' if 'hdr' in previous
+                backup = self.root/('daily-settings-before-hdr-queued.json' if 'hdr_queued' not in previous
+                                    else 'daily-settings-before-hdr-color.json' if 'hdr' in previous
                                     else 'daily-settings-before-hdr.json' if 'mask_profile' in previous
                                     else 'daily-settings-before-optional-mask.json')
                 if not backup.exists():
@@ -185,7 +190,8 @@ class DailyController:
         current = self._current_target(target)
         if value['hdr']:
             from hdr_support import require_hdr_display
-            require_hdr_display(self.root, current['hwnd'], value['hdr_mapping'])
+            require_hdr_display(self.root, current['hwnd'], value['hdr_mapping'],
+                                queued=value['hdr_queued'], capture_queued=value['hdr_queued'])
         if value['mode'] == 'guard':
             from mask_profiles import build_mask, validate_mask
             if value['mask_profile'] == 'cyberpunk':
@@ -222,6 +228,8 @@ class DailyController:
             args += ['--mask', str(mask)]
         if value['hdr']:
             args += ['--hdr', '--hdr-mapping', value['hdr_mapping']]
+        if value['hdr_queued']:
+            args += ['--queued-hdr', '--capture-queued-hdr']
         # This log is created outside the run, which the launcher creates exclusively.
         self.launch_log = self.root/'runs'/(name + '-launch.log')
         self.launch_log.parent.mkdir(exist_ok=True)
@@ -312,6 +320,8 @@ class DailyController:
                               else 'HDR paused' if self.busy and self.state == 'suspended'
                               else 'HDR initializing' if self.busy else 'HDR stopped')
                 hdr_status += ' / '+manifest.get('hdr_mapping','legacy')
+                if manifest.get('hdr_capture_queued'):
+                    hdr_status += ' / queued HDR + capture'
         return dict(state=self.state, detail=self.detail, end_reason=end_reason, hdr_status=hdr_status,
                     run=str(evidence) if evidence else None,
                     geometry=geometry, nr_confirmed=bool(processing and self.metrics.get('nr_confirmed')),
