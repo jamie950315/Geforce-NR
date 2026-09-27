@@ -335,11 +335,28 @@ This queues motion expansion, NR and HDR composition on the existing D3D12
 queue, then waits for their final presentation fence. It does not remove the
 completion/lifetime contract, change the neural model, reduce effect intensity,
 or enable frame generation. Bypass, split and pixel-return paths retain their
-synchronous handling. A separate capture experiment is staged with
-`python stage_capture_queue.py` after the queued build and selected with
-`--capture-queued-hdr` in addition to `--queued-hdr`. It gives swizzle and gray
+synchronous handling. Stage the capture parent with `python stage_capture_queue.py`
+after the queued build, then run `python stage_motion_repair.py` to create the
+current combined worker in `native-hdr-color-motion-repaired`. Select it with
+`--capture-queued-hdr` in addition to `--queued-hdr`, or use the panel checkbox.
+It gives swizzle and gray
 separate descriptor heaps and waits at the later gray fence before readback;
 the D3D11 source-copy wait is deliberately retained.
+
+The motion repair preserves NVOFA's decoded subpixel vectors rather than snapping
+vectors shorter than 0.5 NR pixel to zero. Reset still writes zero motion, and
+vector direction, grid interpolation and resolution scaling are unchanged.
+It also aligns bounded gray-history capacity with the worker's 7680x4320 capture
+limits and rejects oversized gray mappings before allocation. Diagnostic
+1600x900 flow no longer trips the former 1 MiB history reset on every frame.
+The ordinary flow choices remain unchanged; this does not enable or recommend
+Flow900 in the panel. Source/build hashes are attested, old workers remain intact,
+and a missing repaired build blocks the combined option instead of reverting.
+
+Matched saved-face tests found similar static variation and less temporal
+NR-minus-source variation during slow translation, but a slight increase during
+faster translation. These short synthetic tests do not establish universal facial
+denoising or removal of optical-flow errors at occlusion and thin-object boundaries.
 
 Builds use new directories and refuse to overwrite previous variants. Runtime
 hashes, queue-policy records and Windows HDR support are checked before launch.
@@ -355,7 +372,7 @@ and queued HDR plus capture 119.91 FPS in short samples. These alone do not
 establish long-run or live-stream acceptance. These are actual 1920x1080/1600x900 model
 inputs, not renamed NR720 output.
 
-A subsequent 600-second queued-HDR/capture NR900 run with flow1280/G2/Fast
+A subsequent 600-second queued-HDR/capture NR900 run, before the motion repair, with flow1280/G2/Fast
 passed the processing-capacity gates: 71,425 fresh enhanced frames over 595.84
 steady seconds, **119.87 FPS**, minimum 118 frames in a full second, CPU Present
 interval p99 9.882 ms and maximum 11.721 ms. PresentMon independently recorded
@@ -363,6 +380,9 @@ interval p99 9.882 ms and maximum 11.721 ms. PresentMon independently recorded
 dropped frames and zero ETW discontinuities. Its display-event interval maximum
 was 12.400 ms. This remains animated replay evidence, not live PS5/GFN acceptance,
 native 1440p NR, or perfectly uniform 8.333 ms scanout. No daily default changes.
+The motion-repaired build was separately checked in a 45-second replay: 119.43
+fresh FPS, minimum 117/full second, CPU Present interval p99 9.731 ms and maximum
+11.261 ms. The earlier 600-second result is not a fresh soak of the repaired build.
 
 Identical file-fed face crops show finer detail at higher NR input resolutions,
 but do not establish that resolution alone removes facial noise. That comparison

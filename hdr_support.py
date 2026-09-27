@@ -6,8 +6,7 @@ from pathlib import Path
 import subprocess
 
 
-def verify_hdr_build(root, mapping='legacy', queued=False, capture_queued=False):
-    root = Path(root)
+def hdr_build_kind(mapping='legacy', queued=False, capture_queued=False):
     kinds = {'legacy':'hdr', 'color-preserving':'hdr-color'}
     if mapping not in kinds:
         raise ValueError('Unknown HDR mapping')
@@ -19,7 +18,13 @@ def verify_hdr_build(root, mapping='legacy', queued=False, capture_queued=False)
     if capture_queued:
         if not queued:
             raise ValueError('Capture queue requires queued HDR')
-        kind = 'hdr-color-capture-queued'
+        kind = 'hdr-color-motion-repaired'
+    return kind
+
+
+def verify_hdr_build(root, mapping='legacy', queued=False, capture_queued=False):
+    root = Path(root)
+    kind = hdr_build_kind(mapping, queued, capture_queued)
     native = root/('native-'+kind)
     try:
         build = json.loads((root/(kind+'-build.json')).read_text(encoding='utf-8-sig'))
@@ -29,6 +34,8 @@ def verify_hdr_build(root, mapping='legacy', queued=False, capture_queued=False)
             raise RuntimeError('HDR build queue policy mismatch')
         if build.get('capture_queued',False) is not capture_queued:
             raise RuntimeError('HDR build capture queue policy mismatch')
+        if capture_queued and build.get('motion_repaired') is not True:
+            raise RuntimeError('HDR build requires continuous subpixel motion and repaired history')
         for name, key in (('nvngx.dll', 'worker_sha256'), ('nvngx_dlssnr.dll', 'runtime_sha256')):
             actual = hashlib.sha256((native/name).read_bytes()).hexdigest()
             if actual != build[key]:

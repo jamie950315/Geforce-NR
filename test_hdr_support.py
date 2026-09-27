@@ -6,11 +6,22 @@ import unittest
 from unittest.mock import patch
 
 from daily_backend import DEFAULTS, DailyController, migrate_settings, validated
-from hdr_support import require_hdr_display, verify_hdr_build
+from hdr_support import hdr_build_kind, require_hdr_display, verify_hdr_build
 from stage_hdr import patch_once
 
 
 class HdrTests(unittest.TestCase):
+    def test_combined_queue_selects_only_motion_repaired_build(self):
+        self.assertEqual(hdr_build_kind('color-preserving', True, True), 'hdr-color-motion-repaired')
+        self.assertEqual(hdr_build_kind('color-preserving', True), 'hdr-color-queued')
+        self.assertEqual(hdr_build_kind('color-preserving'), 'hdr-color')
+        self.assertEqual(hdr_build_kind(), 'hdr')
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'hdr-color-motion-repaired-build.json'
+            path.write_text(json.dumps(dict(mapping='color-preserving', queued=True, capture_queued=True)))
+            with self.assertRaisesRegex(RuntimeError, 'requires continuous subpixel'):
+                verify_hdr_build(folder, 'color-preserving', True, True)
+
     def test_existing_preferences_migrate_to_hdr_off_without_losing_mask_choice(self):
         old = dict(DEFAULTS, mode='guard', nr_height=900)
         old.pop('hdr')

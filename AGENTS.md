@@ -97,17 +97,31 @@ Only `color.json` after successful HDR presentation confirms the active path.
 HDR tail; `--queued-hdr` selects it only for color-preserving HDR. The final
 present fence retires motion/NR/composition; FG and synchronous special paths
 are not made asynchronous. `stage_capture_queue.py` separately stages
-`native-hdr-color-capture-queued`, selected with additional `--capture-queued-hdr`.
+`native-hdr-color-capture-queued` as the preserved parent for the motion repair.
+`stage_motion_repair.py` stages `native-hdr-color-motion-repaired`; additional
+`--capture-queued-hdr` and the panel's combined queue option select this repaired
+build. The loader requires `motion_repaired=true` and never falls back to the parent.
 Swizzle and gray own different descriptor heaps, gray's later fence retires both,
 and the D3D11 source-copy wait remains mandatory. Neither changes daily defaults.
 The panel's `hdr_queued` boolean selects both optimizations together. It defaults
 off and requires HDR plus Color-preserving; switching to SDR/Legacy clears it.
 Existing preferences migrate with queue off and a local backup. Start preflight
 attests the combined build before saving preferences; no old-worker fallback.
-The combined queued variant passed a 600-second animated HDR replay at NR900,
+The repaired motion path preserves decoded subpixel vectors instead of applying
+the discontinuous 0.5-NR-pixel deadzone; reset still emits zero motion. Gray history
+and pre-allocation validation share the worker's bounded 7680x4320 capacity,
+so a diagnostic 1600x900 flow frame no longer causes a reset every frame.
+The panel/CLI flow allow-list remains unchanged (maximum 1280); higher flow is not
+promoted as a 120-FPS setting. Legacy/SDR workers are preserved, not patched in place.
+The pre-motion-repair combined variant passed a 600-second animated HDR replay at NR900,
 flow1280/G2/Fast and 2560x1440 output: 119.87 fresh FPS, minimum 118/full second,
 zero PresentMon dropped frames/ETW gaps. This is higher-resolution processing
 capacity, not live-stream acceptance or proof of facial-noise removal.
+The motion-repaired build's separate 45-second NR900 replay reached 119.43 fresh
+FPS (minimum 117/full second); do not relabel the parent's 600-second soak as a
+new soak of this build. Matched face diagnostics show similar static variation,
+lower slow-translation residual variation and a slight fast-translation increase,
+not universal denoising. Existing settings and NR/flow resolution defaults remain unchanged.
 `stage_nr_precision.py` is a file-fed-only FP16 NR work-texture experiment, not
 an internal model precision switch or a verified facial-noise fix.
 `--hdr-proof` is a one-time same-frame FP16/proxy readback for

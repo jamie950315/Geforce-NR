@@ -156,11 +156,11 @@ def main():
     if a.overlay_alpha != 255 and not a.fixed_worker:
         raise ValueError('Opacity experiment requires the repaired diagnostic worker')
     if not a.original_worker:
-        kind = ('hdr-color' if a.hdr_mapping == 'color-preserving' else 'hdr') if a.hdr else 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
-        if a.queued_hdr:
-            kind += '-queued'
-        if a.capture_queued_hdr:
-            kind = 'hdr-color-capture-queued'
+        if a.hdr:
+            from hdr_support import hdr_build_kind
+            kind = hdr_build_kind(a.hdr_mapping, a.queued_hdr, a.capture_queued_hdr)
+        else:
+            kind = 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
         native = ROOT / ('native-' + kind)
         build = load(ROOT / (kind + '-build.json'))
         if digest(native/'nvngx.dll') != build['worker_sha256'] or digest(native/'nvngx_dlssnr.dll') != integrity['runtime_sha256']:
@@ -233,6 +233,7 @@ def main():
                 mode=a.mode, mask=mask, daily=a.daily, hdr=a.hdr, hdr_display=hdr_display,
                 hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof, hdr_mapping=a.hdr_mapping,
                 hdr_queued=a.queued_hdr, hdr_capture_queued=a.capture_queued_hdr,
+                hdr_motion_repaired=a.capture_queued_hdr,
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
                 dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py', LAB / 'gfn_core/wire.py')}))
