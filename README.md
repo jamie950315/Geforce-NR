@@ -342,6 +342,15 @@ and queued HDR plus capture 119.91 FPS in short samples. These alone do not
 establish long-run or live-stream acceptance. These are actual 1920x1080/1600x900 model
 inputs, not renamed NR720 output.
 
+A subsequent 600-second queued-HDR/capture NR900 run with flow1280/G2/Fast
+passed the processing-capacity gates: 71,425 fresh enhanced frames over 595.84
+steady seconds, **119.87 FPS**, minimum 118 frames in a full second, CPU Present
+interval p99 9.882 ms and maximum 11.721 ms. PresentMon independently recorded
+71,374 steady display events on the identified output swap chain, with zero
+dropped frames and zero ETW discontinuities. Its display-event interval maximum
+was 12.400 ms. This remains animated replay evidence, not live PS5/GFN acceptance,
+native 1440p NR, or perfectly uniform 8.333 ms scanout. No daily default changes.
+
 Identical file-fed face crops show finer detail at higher NR input resolutions,
 but do not establish that resolution alone removes facial noise. That comparison
 uses zero motion, fixed history and disabled adaptive exposure, not live NVOFA

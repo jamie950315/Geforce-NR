@@ -100,6 +100,10 @@ are not made asynchronous. `stage_capture_queue.py` separately stages
 `native-hdr-color-capture-queued`, selected with additional `--capture-queued-hdr`.
 Swizzle and gray own different descriptor heaps, gray's later fence retires both,
 and the D3D11 source-copy wait remains mandatory. Neither changes daily defaults.
+The combined queued variant passed a 600-second animated HDR replay at NR900,
+flow1280/G2/Fast and 2560x1440 output: 119.87 fresh FPS, minimum 118/full second,
+zero PresentMon dropped frames/ETW gaps. This is higher-resolution processing
+capacity, not live-stream acceptance or proof of facial-noise removal.
 `stage_nr_precision.py` is a file-fed-only FP16 NR work-texture experiment, not
 an internal model precision switch or a verified facial-noise fix.
 `--hdr-proof` is a one-time same-frame FP16/proxy readback for
