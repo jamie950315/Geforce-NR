@@ -79,8 +79,9 @@ def evaluate(text, outcome, mode, duration):
 def main():
     root = Path(sys.argv[1])
     manifest = json.loads((root/'manifest.json').read_text(encoding='utf-8'))
-    if manifest.get('live_pair'):
-        raise ValueError('Live-pair readback runs are visual diagnostics, not timing qualification')
+    if (manifest.get('live_pair') or manifest.get('hdr_proof')
+            or manifest.get('timing_evidence') is False):
+        raise ValueError('Diagnostic/readback runs are not timing qualification')
     outcome = json.loads((root/'outcome.json').read_text(encoding='utf-8'))
     logs = list((root/'logs').glob('*.native.log'))
     if len(logs) != 1:

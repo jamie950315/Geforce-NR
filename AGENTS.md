@@ -29,6 +29,16 @@ the current request ID. Never substitute a previous result or stop a different
 instance during cleanup.
 Arrival gaps and GFN stream loss still fail throughput gates; do not claim a
 completed 120 FPS soak. Never treat the GFN VPN label as proof of exit-node routing.
+This restriction concerns live GFN acceptance. A separate 600-second animated
+HDR replay passed controlled NR720/1440p-output capacity gates at 119.999 FPS,
+with zero dropped PresentMon events on the identified output swap chain.
+It is not live PS5/GFN, native-1440p NR, GPU-bound local-game, or physical scanout
+acceptance. NR1080 reached only 97.67 FPS in the controlled short comparison.
+The runtime was not patched. Do not sweep preset/PerfQuality strings as assumed
+speed modes: static inspection of the deployed 310.8.SF.0 found one shipping
+weight descriptor and fixed ScalingRatio=1.0 in the inspected paths.
+Reject all readback/profiler runs from timing qualification; use the manifest's
+`hdr_proof`, `live_pair`, and `timing_evidence` fields.
 The 25 Mbps experiment is restored to 100 Mbps. See README.md for measured limits.
 
 After the user's A1-JP switch, observed ping is 74-75 ms, but new bypass/NR/Guard

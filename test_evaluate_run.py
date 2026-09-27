@@ -16,6 +16,14 @@ def sample(invalid=False, stall=False):
 
 
 class TimingTests(unittest.TestCase):
+    def test_hdr_or_explicit_diagnostic_readback_cannot_qualify_timing(self):
+        for manifest in ({'hdr_proof':True},{'timing_evidence':False}):
+            with self.subTest(manifest=manifest), tempfile.TemporaryDirectory() as directory:
+                (Path(directory)/'manifest.json').write_text(json.dumps(manifest))
+                with patch('sys.argv',['evaluate_run.py',directory]):
+                    with self.assertRaisesRegex(ValueError,'not timing qualification'):
+                        main()
+
     def test_live_pair_readback_cannot_qualify_timing(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / 'manifest.json').write_text(

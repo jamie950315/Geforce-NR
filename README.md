@@ -279,6 +279,36 @@ the opt-in HDR path has a separate FP16 composition proof.
 
 ## Run and stop
 
+### Controlled processing-capacity result
+
+An isolated 600-second test on RTX 4070 SUPER with the unchanged 310.8.SF.0
+runtime passed the timing gates for **2560x1440 HDR output with NR720,
+flow1280/G2/Fast and Color-preserving mapping**. After startup exclusion,
+595.85 seconds contained 71,502 fresh WGC/enhanced frames: 119.999 FPS,
+119 frames in the slowest full second, CPU Present interval p99 9.486 ms
+and maximum 16.612 ms. PresentMon independently recorded 71,440 steady
+display events on the identified nonzero output swap chain, with no dropped
+frames or ETW discontinuities. Display-event intervals reached 17.164 ms;
+this is not a claim of perfectly uniform 8.333 ms physical scanout.
+
+The source was an approximately 180 FPS animated replay of a saved HDR game
+frame, with panning and a changing frame marker. It was **not live PS5/GFN
+gameplay**, and the replay renderer leaves GPU headroom unlike a GPU-bound
+local game. This establishes processing capacity, not streaming reliability,
+input latency, or native 1440p neural processing. A separate 45-second NR1080
+test using the same replay/output configuration reached only 97.67 fresh FPS.
+The default remains NR720; increasing actual model input size costs throughput.
+
+Static inspection of this exact runtime found one shipping weight descriptor;
+the inspected preset/quality paths do not expose a smaller working model.
+No runtime bytes, signature checks, or GPU compatibility checks were patched.
+An injected Nsight trace incurred substantial overhead and was excluded from
+timing qualification. `evaluate_run.py` rejects live-pair/HDR readbacks and any
+run explicitly marked `timing_evidence=false`. All raw binary, replay, profiler,
+and game-image artifacts remain local and excluded from this repository.
+
+### Interactive launcher
+
 Run in the existing Windows interactive desktop, not an SSH session's noninteractive
 desktop. The `GFN-Codex-Live-Run-20260921` scheduled task has no trigger; it is an
 on-demand interactive launcher. Remote batch commands use `ctps` with
