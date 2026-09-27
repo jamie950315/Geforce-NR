@@ -43,6 +43,8 @@ MODE_LABELS = {
 MODE_VALUES_TO_LABELS = {value: label for label, value in MODE_LABELS.items()}
 MASK_LABELS = {'Custom regions (selected window)': 'custom', 'Cyberpunk 2077 preset (1440p)': 'cyberpunk'}
 HDR_MAPPING_LABELS = {'Color-preserving': 'color-preserving', 'Legacy': 'legacy'}
+# Display 16:9 height equivalents while retaining the existing width-based ABI.
+FLOW_HEIGHT_LABELS = {320: '180', 640: '360', 960: '540', 1280: '720'}
 
 
 def fit_window_bounds(requested, work_area, decoration=(0, 0)):
@@ -380,8 +382,9 @@ class DailyApp:
         self.ttk.Label(advanced, text="Advanced processing", style="Section.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 9))
         self.ttk.Label(advanced, text="NR input height", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
         self.nr_height_frame = self._radio_row(advanced, 2, self.nr_height_var, (720, 900, 1080))
-        self.ttk.Label(advanced, text="Optical flow width", style="Muted.TLabel").grid(row=3, column=0, sticky="w", pady=(8, 0))
-        self.flow_width_frame = self._radio_row(advanced, 4, self.flow_width_var, (320, 640, 960, 1280))
+        self.ttk.Label(advanced, text="Optical flow height (16:9)", style="Muted.TLabel").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        self.flow_width_frame = self._radio_row(advanced, 4, self.flow_width_var,
+            tuple(FLOW_HEIGHT_LABELS), labels=FLOW_HEIGHT_LABELS)
         self.ttk.Label(advanced, text="Flow grid", style="Muted.TLabel").grid(row=5, column=0, sticky="w", pady=(8, 0))
         self.flow_grid_frame = self._radio_row(advanced, 6, self.flow_grid_var, (2, 4), prefix="G")
         self.ttk.Label(advanced, text="Flow preset", style="Muted.TLabel").grid(row=7, column=0, sticky="w", pady=(8, 0))
@@ -399,7 +402,7 @@ class DailyApp:
             text="Queued HDR + capture (experimental)", variable=self.hdr_queued_var)
         self.hdr_queued_check.grid(row=10, column=0, sticky="w", pady=(10, 0))
         self.ttk.Label(advanced, style="Muted.TLabel", wraplength=340, justify="left",
-            text="Requires HDR + Color-preserving. NR900 / flow1280 / G2 / Fast tested near 120 FPS; not guaranteed.").grid(
+            text="Requires HDR + Color-preserving. NR900 / flow height 720 / G2 / Fast tested near 120 FPS; not guaranteed.").grid(
                 row=11, column=0, sticky="ew", pady=(3, 0))
 
         preference_actions = self.ttk.Frame(advanced, style="Panel.TFrame")
@@ -457,12 +460,13 @@ class DailyApp:
         *,
         prefix: str = "",
         title_case: bool = False,
+        labels: dict[Any, str] | None = None,
     ) -> Any:
         frame = self.ttk.Frame(parent, style="Panel.TFrame")
         frame.grid(row=row, column=0, sticky="ew", pady=(2, 0))
         for column, value in enumerate(values):
             frame.columnconfigure(column, weight=1)
-            label = str(value).title() if title_case else f"{prefix}{value}"
+            label = labels[value] if labels is not None else (str(value).title() if title_case else f"{prefix}{value}")
             button = self.ttk.Radiobutton(frame, text=label, variable=variable, value=value)
             button.grid(row=0, column=column, sticky="w", padx=(0, 7))
         return frame
@@ -595,7 +599,7 @@ class DailyApp:
         self._apply_settings_to_form(RECOMMENDED_SETTINGS)
         try:
             self.controller.save_settings(dict(RECOMMENDED_SETTINGS))
-            self.status_detail_var.set("Recommended NR720, flow 1280, G2 Fast, mask off, SDR restored and saved.")
+            self.status_detail_var.set("Recommended NR720, flow height 720 (16:9), G2 Fast, mask off, SDR restored and saved.")
             self._refresh_mask_status()
         except Exception as exc:
             _write_error_log("Failed to restore recommended settings")

@@ -54,6 +54,9 @@ width/grid/preset overrides. Five 60-second live samples support this 120-orient
 configuration; NR900/1080 local processing p95 is 8.88/10.48 ms. G2 Medium at NR720
 is 7.83 ms versus Fast 7.07 ms. All output 2560x1440 via residual composition.
 The flow-width1280 limit is a software allow-list, not a measured hardware cap.
+The panel displays Optical flow height (16:9): 180/360/540/720, retaining stored
+width values 320/640/960/1280 and the existing CLI/processing contract. Actual
+geometry remains authoritative for non-16:9 sources; no preference migration.
 Do not present offline warp error as live perceptual quality or promote a new
 default without the corresponding configuration decision.
 

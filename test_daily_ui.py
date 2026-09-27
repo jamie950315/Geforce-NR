@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from daily_ui import DailyApp, RECOMMENDED_SETTINGS, fit_window_bounds
+from daily_ui import DailyApp, FLOW_HEIGHT_LABELS, RECOMMENDED_SETTINGS, fit_window_bounds
 
 
 class Variable:
@@ -17,6 +17,16 @@ class Variable:
 
 
 class CloseRecoveryTests(unittest.TestCase):
+    def test_flow_height_labels_keep_width_values_and_selection(self):
+        app = DailyApp.__new__(DailyApp)
+        app.ttk = SimpleNamespace(Frame=Mock(), Radiobutton=Mock())
+        variable = Variable()
+        app._radio_row(None, 4, variable, tuple(FLOW_HEIGHT_LABELS), labels=FLOW_HEIGHT_LABELS)
+        calls = app.ttk.Radiobutton.call_args_list
+        self.assertEqual([(c.kwargs['text'], c.kwargs['value']) for c in calls],
+                         [('180',320),('360',640),('540',960),('720',1280)])
+        self.assertTrue(all(c.kwargs['variable'] is variable for c in calls))
+
     def test_hdr_preference_round_trip_and_legacy_default(self):
         app = DailyApp.__new__(DailyApp)
         for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'hdr_queued', 'nr_height',
@@ -36,6 +46,10 @@ class CloseRecoveryTests(unittest.TestCase):
         app._apply_settings_to_form(dict(RECOMMENDED_SETTINGS, hdr=True, hdr_queued=True, nr_height=900))
         self.assertTrue(app._settings_from_form()['hdr_queued'])
         self.assertEqual(app._settings_from_form()['nr_height'],900)
+        for width in FLOW_HEIGHT_LABELS:
+            saved=dict(RECOMMENDED_SETTINGS, flow_width=width)
+            app._apply_settings_to_form(saved)
+            self.assertEqual(app._settings_from_form(),saved)
 
     def test_incompatible_hdr_changes_explicitly_clear_queue_selection(self):
         app = DailyApp.__new__(DailyApp)

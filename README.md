@@ -62,7 +62,7 @@ verified. Protected content and windows that Windows Graphics Capture cannot
 capture are not guaranteed to work; listing a window does not establish capture
 compatibility.
 
-HUD Mask is off by default. NR720 with flow width 1280 / G2 / Fast remains the
+HUD Mask is off by default. NR720 with flow height 720 (width 1280) / G2 / Fast remains the
 default; actual processing and residual-output dimensions follow the selected
 source and are shown in the panel. At the measured 2560x1440 source size, NR and
 flow are 1280x720. **Stop safely** ends only this panel's owned session.
@@ -312,7 +312,10 @@ and game-image artifacts remain local and excluded from this repository.
 The daily panel exposes **Queued HDR + capture (experimental)** under Advanced
 processing. Enable HDR output, select **Color-preserving**, then enable this
 option. For the measured higher-resolution configuration, select NR input height
-**900**, flow width **1280**, grid **G2**, and preset **Fast**, then Start.
+**900**, flow height **720**, grid **G2**, and preset **Fast**, then Start.
+The panel's flow heights 180/360/540/720 are 16:9 equivalents of the stored
+widths 320/640/960/1280. Preferences and CLI remain width-based; other source
+aspect ratios may produce different actual heights, shown in the run geometry.
 The option launches both queue optimizations together and checks the exact
 combined build before saving Start preferences. A missing/altered build blocks
 Start with an error; it never silently selects the old worker. Status includes
