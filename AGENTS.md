@@ -93,6 +93,15 @@ closed when Windows HDR is lost. NR/flow operate on SDR proxies; bounded linear
 residual composition preserves the original HDR anchor, including exact bypass
 and full-mask cores. The mask preview and ordinary PPM exports remain SDR.
 Only `color.json` after successful HDR presentation confirms the active path.
+`stage_hdr.py --mapping color-preserving --queued` stages an opt-in queued
+HDR tail; `--queued-hdr` selects it only for color-preserving HDR. The final
+present fence retires motion/NR/composition; FG and synchronous special paths
+are not made asynchronous. `stage_capture_queue.py` separately stages
+`native-hdr-color-capture-queued`, selected with additional `--capture-queued-hdr`.
+Swizzle and gray own different descriptor heaps, gray's later fence retires both,
+and the D3D11 source-copy wait remains mandatory. Neither changes daily defaults.
+`stage_nr_precision.py` is a file-fed-only FP16 NR work-texture experiment, not
+an internal model precision switch or a verified facial-noise fix.
 `--hdr-proof` is a one-time same-frame FP16/proxy readback for
 `validate_hdr_proof.py`, never timing or physical-display luminance evidence.
 `hdr_mapping` selects `legacy` (`native-hdr`) or `color-preserving`

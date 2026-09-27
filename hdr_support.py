@@ -6,17 +6,29 @@ from pathlib import Path
 import subprocess
 
 
-def verify_hdr_build(root, mapping='legacy'):
+def verify_hdr_build(root, mapping='legacy', queued=False, capture_queued=False):
     root = Path(root)
     kinds = {'legacy':'hdr', 'color-preserving':'hdr-color'}
     if mapping not in kinds:
         raise ValueError('Unknown HDR mapping')
     kind = kinds[mapping]
+    if queued:
+        if mapping != 'color-preserving':
+            raise ValueError('Queued HDR requires color-preserving mapping')
+        kind += '-queued'
+    if capture_queued:
+        if not queued:
+            raise ValueError('Capture queue requires queued HDR')
+        kind = 'hdr-color-capture-queued'
     native = root/('native-'+kind)
     try:
         build = json.loads((root/(kind+'-build.json')).read_text(encoding='utf-8-sig'))
         if build.get('mapping','legacy') != mapping:
             raise RuntimeError('HDR build mapping mismatch')
+        if build.get('queued',False) is not queued:
+            raise RuntimeError('HDR build queue policy mismatch')
+        if build.get('capture_queued',False) is not capture_queued:
+            raise RuntimeError('HDR build capture queue policy mismatch')
         for name, key in (('nvngx.dll', 'worker_sha256'), ('nvngx_dlssnr.dll', 'runtime_sha256')):
             actual = hashlib.sha256((native/name).read_bytes()).hexdigest()
             if actual != build[key]:
@@ -26,8 +38,8 @@ def verify_hdr_build(root, mapping='legacy'):
     return native, build
 
 
-def require_hdr_display(root, hwnd, mapping='legacy'):
-    native, _ = verify_hdr_build(root, mapping)
+def require_hdr_display(root, hwnd, mapping='legacy', queued=False, capture_queued=False):
+    native, _ = verify_hdr_build(root, mapping, queued, capture_queued)
     result = subprocess.run([str(native/'nvngx.dll'), '--hdr-display', str(hwnd)],
         capture_output=True, text=True, timeout=10,
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))

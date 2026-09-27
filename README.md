@@ -307,6 +307,50 @@ timing qualification. `evaluate_run.py` rejects live-pair/HDR readbacks and any
 run explicitly marked `timing_evidence=false`. All raw binary, replay, profiler,
 and game-image artifacts remain local and excluded from this repository.
 
+### Opt-in higher-resolution HDR experiments
+
+The daily panel and saved preferences are unchanged. Diagnostic CLI runs can
+select a separately attested queued HDR worker:
+
+```powershell
+python stage_hdr.py --mapping color-preserving --queued
+# Add these to the existing diagnostic launch arguments:
+# --hdr --hdr-mapping color-preserving --queued-hdr --height 900
+```
+
+This queues motion expansion, NR and HDR composition on the existing D3D12
+queue, then waits for their final presentation fence. It does not remove the
+completion/lifetime contract, change the neural model, reduce effect intensity,
+or enable frame generation. Bypass, split and pixel-return paths retain their
+synchronous handling. A separate capture experiment is staged with
+`python stage_capture_queue.py` after the queued build and selected with
+`--capture-queued-hdr` in addition to `--queued-hdr`. It gives swizzle and gray
+separate descriptor heaps and waits at the later gray fence before readback;
+the D3D11 source-copy wait is deliberately retained.
+
+Builds use new directories and refuse to overwrite previous variants. Runtime
+hashes, queue-policy records and Windows HDR support are checked before launch.
+`--hdr-proof` confirms the active queue branches and HDR composition but makes
+the run ineligible as timing evidence.
+
+On a fixed animated HDR frame replay at 2560x1440 output, 45-second NR1080
+samples measured 96.09 fresh FPS before queued HDR and 101.72 after it, with the
+same flow1280/G2/Fast and appearance settings. Reducing flow to 640 reached
+111.33 FPS, still below 120 and not a quality-neutral substitution. At NR900 with
+flow1280, the synchronous baseline reached 112.49 FPS, queued HDR 119.09 FPS,
+and queued HDR plus capture 119.91 FPS in short samples. These alone do not
+establish long-run or live-stream acceptance. These are actual 1920x1080/1600x900 model
+inputs, not renamed NR720 output.
+
+Identical file-fed face crops show finer detail at higher NR input resolutions,
+but do not establish that resolution alone removes facial noise. That comparison
+uses zero motion, fixed history and disabled adaptive exposure, not live NVOFA
+or physical HDR output. `stage_nr_precision.py` stages a separate file-fed-only
+NR720/1080 FP16 work-texture experiment; full proxy/residual output stays RGBA8.
+This changes interface textures, not the binary's internal tensor precision.
+Successful FP16 evaluation showed only a small static variation change and is
+not promoted as a noise fix or exposed by the daily launcher.
+
 ### Interactive launcher
 
 Run in the existing Windows interactive desktop, not an SSH session's noninteractive

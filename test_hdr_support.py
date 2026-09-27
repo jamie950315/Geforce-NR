@@ -28,6 +28,12 @@ class HdrTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'unavailable'):
                 verify_hdr_build(folder)
 
+    def test_queued_variant_rejects_legacy_mapping(self):
+        with self.assertRaisesRegex(ValueError,'requires color-preserving'):
+            verify_hdr_build('.',mapping='legacy',queued=True)
+        with self.assertRaisesRegex(ValueError,'requires queued HDR'):
+            verify_hdr_build('.',mapping='color-preserving',capture_queued=True)
+
     def probe(self, doc, returncode=0):
         with patch('hdr_support.verify_hdr_build', return_value=(Path('native-hdr'), {})), \
              patch('hdr_support.subprocess.run', return_value=SimpleNamespace(stdout=json.dumps(doc), returncode=returncode)):

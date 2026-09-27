@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 
@@ -71,6 +72,18 @@ def validate(run):
         source_above_sdr_white=int(np.any(original > meta['white'],axis=2).sum()))
     if mapping == 'color-preserving':
         result['proxy_max_code_error'] = float(proxy_error)
+    if manifest.get('hdr_queued') and manifest['mode'] != 'bypass':
+        logs=list((run/'logs').glob('*.native.log'))
+        assert len(logs)==1
+        tokens=re.findall(r'\[hdr-tail\] queued motion/NR retired at present fence (\d+)',logs[0].read_text())
+        assert len(tokens)==1 and int(tokens[0])>0, 'Queued HDR branch was not confirmed'
+        result['queued_tail_confirmed']=True
+    if manifest.get('hdr_capture_queued'):
+        logs=list((run/'logs').glob('*.native.log'))
+        assert len(logs)==1
+        tokens=re.findall(r'\[capture-queue\] swizzle=(\d+) gray=(\d+) retired; dedicated gray heap; D3D11 wait retained',logs[0].read_text())
+        assert len(tokens)==1 and 0<int(tokens[0][0])<int(tokens[0][1]), 'Capture queue branch was not confirmed'
+        result['capture_queue_confirmed']=True
     if meta['bypass']:
         assert np.array_equal(original,output[:,:,:3]), 'HDR bypass did not preserve source exactly'
         result['bypass_exact'] = True

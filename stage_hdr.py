@@ -17,9 +17,61 @@ def patch_once(source, old, new):
     return source.replace(old, new, 1)
 
 
-def patch_sources(files, mapping='legacy'):
+def build_kind(mapping, queued=False):
     if mapping not in ('legacy', 'color-preserving'):
         raise ValueError('Unknown HDR mapping')
+    if queued and mapping != 'color-preserving':
+        raise ValueError('Queued HDR requires color-preserving mapping')
+    return ('hdr-color' if mapping == 'color-preserving' else 'hdr') + ('-queued' if queued else '')
+
+
+def patch_queued_tail(source, present):
+    """Extend the existing single-queue SDR tail contract to ordinary HDR frames."""
+    source = patch_once(source, 'static bool PresentHdr(VideoState &v, bool bypass);',
+        'static bool PresentHdr(VideoState &v, bool bypass, UINT64 *submitted = nullptr);\n'
+        'static bool HdrQueuedTailAllowed();')
+    source = patch_once(source, 'if (g_hdr_capture) return PresentHdr(v, false);',
+        'if (g_hdr_capture) return PresentHdr(v, false, submitted);')
+    source = patch_once(source,
+        'defer_tail = !g_hdr_capture && warmup_done && h.feature != nullptr &&',
+        'defer_tail = (!g_hdr_capture || HdrQueuedTailAllowed()) && warmup_done && h.feature != nullptr &&')
+    present = patch_once(present, 'static bool PresentHdr(VideoState &v, bool bypass)\n{',
+        '''static bool HdrQueuedTailAllowed()
+{
+    // FG has a separate presenter. Ordinary HDR shares motion/NR's h.queue.
+    return !FgRequested();
+}
+
+static bool PresentHdr(VideoState &v, bool bypass, UINT64 *submitted)
+{
+    if (submitted) *submitted = 0;''')
+    present = patch_once(present, '    const bool framegen = FgRequested() && !bypass;',
+        '''    const bool framegen = FgRequested() && !bypass;
+    if (submitted && (bypass || !HdrQueuedTailAllowed()))
+        return FailGpuWork("hdr-tail", "ineligible-deferred-frame", E_FAIL);''')
+    present = patch_once(present,
+        '    const auto fence = EndCommands();\n    if (!WaitFenceValue(h.fence, fence, 2000, "hdr-present"))',
+        '''    const auto fence = EndCommands();
+    if (submitted) *submitted = fence;
+    // h.queue is shared with motion and NR. Waiting for this later fence also
+    // retires their resources; no next-frame capture or descriptor reuse can
+    // occur before return. A failed wait retains the existing fail-closed path.
+    if (!WaitFenceValue(h.fence, fence, submitted ? 60000 : 2000, "hdr-present"))''')
+    present = patch_once(present,
+        '    // The same status reading as the SDR path: a mode change is a SUCCESS',
+        '''    // Opt-in HDR proof may submit a synchronous readback below, but only
+    // after this fence has retired. The caller retains this original token.
+    static bool queued_reported = false;
+    if (submitted && !queued_reported) {
+        Log("[hdr-tail] queued motion/NR retired at present fence %llu", fence);
+        queued_reported = true;
+    }
+    // The same status reading as the SDR path: a mode change is a SUCCESS''')
+    return source, present
+
+
+def patch_sources(files, mapping='legacy', queued=False):
+    build_kind(mapping, queued)
     display = files['hdr_display.h']
     display = patch_once(display, 'bool enabled = false;', 'bool known = false;\n    bool enabled = false;')
     display = patch_once(display, '"NS_HDR"', '"GFN_NR_HDR"')
@@ -61,6 +113,9 @@ def patch_sources(files, mapping='legacy'):
         if (!GfnHdrStatus(w, height) || !GfnHdrProof(v, bypass))
             return FailGpuWork("hdr-evidence", "HDR-status-or-proof-failed", E_FAIL);
     }''')
+    if queued:
+        source, present = patch_queued_tail(source, present)
+        files['dlss5-feed-host64.cpp'] = source
     files['hdr_present.inl'] = present
     hud = files['hud_guard.inl']
     if hud.count('g_hdr_capture || ') != 2:
@@ -89,9 +144,10 @@ def patch_sources(files, mapping='legacy'):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--mapping', choices=['legacy','color-preserving'], default='legacy')
+    ap.add_argument('--queued', action='store_true', help='Build the isolated color-preserving HDR queued-tail experiment')
     args = ap.parse_args()
     root = Path(__file__).resolve().parent
-    kind = 'hdr-color' if args.mapping == 'color-preserving' else 'hdr'
+    kind = build_kind(args.mapping, args.queued)
     source, dest = root/'native-repaired', root/('native-'+kind)
     if dest.exists():
         raise RuntimeError('Preserve the existing HDR build; move it to a versioned backup before rebuilding')
@@ -102,7 +158,7 @@ def main():
             raise RuntimeError('Repaired source/build integrity mismatch: '+name)
     names = ('dlss5-feed-host64.cpp','hdr_display.h','hdr_present.inl','hdr_shaders.h','hud_guard.inl')
     inputs = {name:digest(source/name) for name in names}
-    patched = patch_sources({name:(source/name).read_text(encoding='utf-8-sig') for name in names}, args.mapping)
+    patched = patch_sources({name:(source/name).read_text(encoding='utf-8-sig') for name in names}, args.mapping, args.queued)
     shutil.copytree(source,dest,ignore=shutil.ignore_patterns('*.obj','*.pdb','*.ilk','*.exp','*.log'))
     for name, text in patched.items():
         (dest/name).write_text(text,encoding='utf-8-sig')
@@ -116,7 +172,7 @@ def main():
     if result.returncode:
         raise RuntimeError('HDR build failed; inspect hdr-build.log')
     extra = ('hdr_color_math.h',) if args.mapping == 'color-preserving' else ()
-    record = dict(mapping=args.mapping,worker_sha256=digest(dest/'nvngx.dll'),runtime_sha256=digest(dest/'nvngx_dlssnr.dll'),
+    record = dict(mapping=args.mapping,queued=args.queued,worker_sha256=digest(dest/'nvngx.dll'),runtime_sha256=digest(dest/'nvngx_dlssnr.dll'),
         source_sha256=digest(dest/'dlss5-feed-host64.cpp'),inputs=inputs,
         patched={name:digest(dest/name) for name in (*names,'hdr_runtime.inl',*extra)},
         staging_sha256=digest(Path(__file__)))
