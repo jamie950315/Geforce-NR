@@ -5,9 +5,9 @@ from pathlib import Path
 import sys
 
 
-def read_json(path):
+def read_json(path, *, loads=json.loads):
     if sys.platform != 'win32':
-        return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+        return loads(Path(path).read_text(encoding='utf-8-sig'))
     import ctypes
     from ctypes import wintypes
     import msvcrt
@@ -28,4 +28,4 @@ def read_json(path):
         kernel.CloseHandle(handle)
         raise
     with os.fdopen(fd, 'r', encoding='utf-8-sig') as file:
-        return json.load(file)
+        return loads(file.read())

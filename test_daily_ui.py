@@ -3,20 +3,173 @@ import unittest
 from unittest.mock import Mock, patch
 
 from daily_ui import DailyApp, FLOW_HEIGHT_LABELS, NR_HEIGHTS, RECOMMENDED_SETTINGS, fit_window_bounds
+from appearance_presets import APPEARANCE_LABELS, SLIDER_RANGES, preset_config
 
 
 class Variable:
     def __init__(self):
         self.value = ''
+        self.callbacks = []
 
     def set(self, value):
         self.value = value
+        for callback in self.callbacks:
+            callback()
 
     def get(self):
         return self.value
 
+    def trace_add(self, mode, callback):
+        self.callbacks.append(callback)
+
+
+def appearance_app():
+    app = DailyApp.__new__(DailyApp)
+    app.controller = SimpleNamespace(busy=False)
+    app._closing = False
+    app._loading_appearance = False
+    app.appearance_preset_var, app.appearance_warning_var = Variable(), Variable()
+    app.appearance_vars = {field: Variable() for field in SLIDER_RANGES}
+    app.appearance_scale_vars = {field: Variable() for field in SLIDER_RANGES}
+    for field, variable in app.appearance_vars.items():
+        variable.trace_add('write', lambda field=field: app._appearance_text_changed(field))
+    app._apply_appearance_to_form(preset_config('clean'))
+    return app
+
 
 class CloseRecoveryTests(unittest.TestCase):
+    def test_appearance_presets_load_all_values_without_becoming_custom(self):
+        app = appearance_app()
+        for label, key in APPEARANCE_LABELS.items():
+            if key == 'custom':
+                continue
+            with self.subTest(preset=key):
+                app.appearance_preset_var.set(label)
+                app._appearance_preset_selected()
+                self.assertEqual(app._appearance_from_form(), preset_config(key))
+        before = dict(app._appearance_from_form()['values'])
+        app.appearance_preset_var.set(next(label for label, key in APPEARANCE_LABELS.items() if key == 'custom'))
+        app._appearance_preset_selected()
+        self.assertEqual(app._appearance_from_form()['values'], before)
+
+    def test_appearance_edit_marks_custom_and_preserves_other_fields(self):
+        app = appearance_app()
+        original = app._appearance_from_form()['values']
+        app._appearance_slider_changed('intensity', '0.634')
+        value = app._appearance_from_form()
+        self.assertEqual(value['preset'], 'custom')
+        self.assertEqual(value['values']['intensity'], 0.63)
+        self.assertEqual({key: val for key, val in value['values'].items() if key != 'intensity'},
+                         {key: val for key, val in original.items() if key != 'intensity'})
+        app.appearance_vars['skin_structure'].set('-1')
+        self.assertEqual(app._appearance_from_form()['values']['skin_structure'], -1)
+        self.assertIn('Skin structure: Off', app.appearance_warning_var.get())
+        app.appearance_vars['local_structure'].set('0.9')
+        self.assertIn('amplify grain', app.appearance_warning_var.get())
+
+    def test_slider_trough_click_seeks_coordinate_and_thumb_keeps_native_drag(self):
+        app = appearance_app()
+        app.appearance_vars['intensity'].set('0.70')
+        widget = SimpleNamespace(identify=Mock(return_value='trough'), get=Mock(return_value=0.43), focus_set=Mock())
+        event = SimpleNamespace(widget=widget, x=186, y=10)
+        self.assertEqual(app._appearance_slider_click('intensity', event), 'break')
+        self.assertEqual(app._appearance_from_form()['values']['intensity'], 0.43)
+        self.assertEqual(app._appearance_from_form()['preset'], 'custom')
+        widget.get.assert_called_once_with(186, 10)
+        widget.focus_set.assert_called_once_with()
+        widget.identify.return_value = 'slider'
+        self.assertIsNone(app._appearance_slider_click('intensity', event))
+        self.assertEqual(widget.get.call_count, 1)
+        app.controller.busy = True
+        widget.identify.return_value = 'trough'
+        self.assertEqual(app._appearance_slider_click('intensity', event), 'break')
+        self.assertEqual(widget.get.call_count, 1)
+
+    def test_slider_keyboard_steps_hundredths_and_stops_at_endpoints(self):
+        app = appearance_app()
+        app.appearance_vars['intensity'].set('0.70')
+        for key, expected in (('Right', 0.71), ('Left', 0.70), ('Up', 0.71), ('Down', 0.70),
+                              ('End', 1.0), ('Right', 1.0), ('Home', 0.0), ('Left', 0.0)):
+            with self.subTest(key=key, expected=expected):
+                self.assertEqual(app._appearance_slider_key('intensity', SimpleNamespace(keysym=key)), 'break')
+                self.assertEqual(app._appearance_from_form()['values']['intensity'], expected)
+        app._appearance_slider_key('skin_structure', SimpleNamespace(keysym='Home'))
+        self.assertEqual(app._appearance_from_form()['values']['skin_structure'], -1)
+        self.assertIn('Off', app.appearance_warning_var.get())
+
+    def test_slider_keyboard_does_not_replace_invalid_typed_value(self):
+        app = appearance_app()
+        for value in ('nan', '1.5', ''):
+            with self.subTest(value=value):
+                app.appearance_vars['intensity'].set(value)
+                self.assertEqual(app._appearance_slider_key('intensity', SimpleNamespace(keysym='Right')), 'break')
+                self.assertEqual(app.appearance_vars['intensity'].get(), value)
+
+    def test_invalid_appearance_text_remains_visible_and_blocks_save(self):
+        app = appearance_app()
+        app.controller.save_appearance = Mock()
+        app.messagebox = SimpleNamespace(showerror=Mock())
+        for value in ('nan', 'inf', '2.01', 'not-a-number', ''):
+            with self.subTest(value=value):
+                app.appearance_vars['local_structure'].set(value)
+                with self.assertRaises(ValueError):
+                    app._appearance_from_form()
+                app.save_appearance()
+                self.assertEqual(app.appearance_vars['local_structure'].get(), value)
+        app.controller.save_appearance.assert_not_called()
+
+    def test_save_all_validates_appearance_before_writing_daily_settings(self):
+        app = appearance_app()
+        app._settings_from_form = lambda: dict(RECOMMENDED_SETTINGS)
+        app.controller.save_settings, app.controller.save_appearance = Mock(), Mock()
+        app.messagebox = SimpleNamespace(showerror=Mock())
+        app.appearance_vars['intensity'].set('5')
+        with patch('daily_ui._write_error_log'):
+            app.save_preferences()
+        app.controller.save_settings.assert_not_called()
+        app.controller.save_appearance.assert_not_called()
+
+    def test_appearance_slider_and_reset_do_not_change_busy_session(self):
+        app = appearance_app()
+        app.controller.busy = True
+        before = app._appearance_from_form()
+        app._appearance_slider_changed('intensity', '0.5')
+        app.reset_appearance()
+        self.assertEqual(app._appearance_from_form(), before)
+
+    def test_ordinary_start_passes_appearance_separately_from_processing(self):
+        app = appearance_app()
+        app.target_var = Variable()
+        app.target_var.set('game')
+        target = dict(hwnd=1)
+        app.target_by_display = {'game': target}
+        app._settings_from_form = lambda: dict(RECOMMENDED_SETTINGS)
+        app.controller.start = Mock()
+        app.status_state_var, app.status_detail_var = Variable(), Variable()
+        app._sync_controls = Mock()
+        app.appearance_vars['intensity'].set('0.6')
+        appearance = app._appearance_from_form()
+        app.start()
+        app.controller.start.assert_called_once_with(target, RECOMMENDED_SETTINGS, appearance_config=appearance)
+
+    def test_saved_appearance_load_is_not_replaced_with_clean(self):
+        app = appearance_app()
+        saved = preset_config('custom')
+        saved['values']['local_structure'] = 0.6
+        app.controller.appearance_settings = saved
+        app._load_appearance_settings()
+        self.assertEqual(app._appearance_from_form(), saved)
+
+    def test_saved_custom_precision_is_not_silently_rounded_on_load(self):
+        app = appearance_app()
+        saved = preset_config('custom')
+        saved['values']['intensity'] = 0.3333
+        app.controller.appearance_settings = saved
+        app._load_appearance_settings()
+        self.assertEqual(app.appearance_vars['intensity'].get(), '0.3333')
+        self.assertEqual(app.appearance_vars['local_tone'].get(), '0.25')
+        self.assertEqual(app._appearance_from_form(), saved)
+
     def test_chiaki_chain_requires_unique_or_explicit_chiaki(self):
         app = DailyApp.__new__(DailyApp)
         app.target_var = Variable()
@@ -38,11 +191,12 @@ class CloseRecoveryTests(unittest.TestCase):
         target = dict(hwnd=1, exe='chiaki.exe')
         app._chiaki_target = lambda: target
         app.controller = SimpleNamespace(start_chiaki_chain=Mock())
+        app._appearance_from_form = lambda: preset_config('clean')
         app._settings_from_form = Mock(side_effect=AssertionError('Must not read daily settings'))
         app.status_state_var, app.status_detail_var = Variable(), Variable()
         app._sync_controls = Mock()
         app.start_chiaki_chain()
-        app.controller.start_chiaki_chain.assert_called_once_with(target)
+        app.controller.start_chiaki_chain.assert_called_once_with(target, appearance_config=preset_config('clean'))
         app._settings_from_form.assert_not_called()
         self.assertEqual(app._last_state, 'starting')
 
@@ -54,10 +208,11 @@ class CloseRecoveryTests(unittest.TestCase):
         self.assertTrue(app._chiaki_can_start())
         self.assertIsNone(app._chiaki_target())
         app.controller = SimpleNamespace(start_chiaki_chain=Mock())
+        app._appearance_from_form = lambda: preset_config('clean')
         app.status_state_var, app.status_detail_var = Variable(), Variable()
         app._sync_controls = Mock()
         app.start_chiaki_chain()
-        app.controller.start_chiaki_chain.assert_called_once_with(None)
+        app.controller.start_chiaki_chain.assert_called_once_with(None, appearance_config=preset_config('clean'))
         app.target_var.set('other')
         self.assertFalse(app._chiaki_can_start())
 
@@ -175,6 +330,7 @@ class CloseRecoveryTests(unittest.TestCase):
 
     def test_loading_existing_preferences_preserves_legacy_mapping(self):
         app = DailyApp.__new__(DailyApp)
+        app._load_appearance_settings = Mock()
         loaded = []
         app._apply_settings_to_form = loaded.append
         old = dict(RECOMMENDED_SETTINGS, hdr=True)
@@ -202,7 +358,7 @@ class CloseRecoveryTests(unittest.TestCase):
         app = DailyApp.__new__(DailyApp)
         states = {}
         for name in ('target_combo', 'mode_combo', 'refresh_button', 'save_button',
-                     'restore_button', 'hdr_check', 'hdr_mapping_combo', 'hdr_queued_check', 'mask_check', 'mask_combo',
+                     'restore_button', 'appearance_preset_combo', 'hdr_check', 'hdr_mapping_combo', 'hdr_queued_check', 'mask_check', 'mask_combo',
                      'edit_mask_button', 'start_button', 'chain_button', 'stop_button', 'open_run_button'):
             setattr(app, name, SimpleNamespace(configure=lambda name=name, **kwargs: states.update({name: kwargs['state']})))
         for name in ('nr_height_frame', 'flow_width_frame', 'flow_grid_frame', 'flow_preset_frame'):
@@ -214,6 +370,8 @@ class CloseRecoveryTests(unittest.TestCase):
         app.target_var = Variable()
         app.target_by_display = {}
         app.targets = [dict(exe='chiaki.exe')]
+        appearance_state = {}
+        app.appearance_controls = [SimpleNamespace(configure=lambda **kwargs: appearance_state.update(kwargs))]
         app._mask_ready = True
         app._run_path = None
         app._last_state = 'idle'
@@ -230,6 +388,8 @@ class CloseRecoveryTests(unittest.TestCase):
             self.assertEqual(states['hdr_mapping_combo'], mapping_expected)
             self.assertEqual(states['hdr_queued_check'], 'normal' if mapping_expected=='readonly' else 'disabled')
             self.assertEqual(states['chain_button'], 'disabled' if busy or closing else 'normal')
+            self.assertEqual(states['appearance_preset_combo'], 'disabled' if busy or closing else 'readonly')
+            self.assertEqual(appearance_state['state'], 'disabled' if busy or closing else 'normal')
         app._controller_busy=lambda: False
         app._closing=False
         app.hdr_mapping_var.set('Legacy')

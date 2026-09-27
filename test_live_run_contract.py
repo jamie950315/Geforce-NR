@@ -62,6 +62,15 @@ class DailyGeometryTests(unittest.TestCase):
         engine.metrics.resume.assert_called_once()
 
     def test_failed_latest_record_removes_active_pointer(self):
+        self.check_failed_latest_appearance('clean')
+
+    def test_custom_appearance_reaches_runtime_exactly(self):
+        from appearance_presets import preset_config
+        values = preset_config('custom')['values']
+        values.update(style=2, auto_mask=0, intensity=.37, skin_structure=2.45)
+        self.check_failed_latest_appearance('custom', values)
+
+    def check_failed_latest_appearance(self, preset, custom=None):
         import live_run
 
         with tempfile.TemporaryDirectory() as folder:
@@ -88,7 +97,7 @@ class DailyGeometryTests(unittest.TestCase):
             with ExitStack() as stack:
                 stack.enter_context(patch.object(sys, 'argv', ['live_run.py', '--name', 'failure-check',
                     '--hwnd', '1', '--mode', 'bypass', '--seconds', '5', '--fps', '60', '--original-worker',
-                    '--appearance-preset', 'clean']))
+                    '--appearance-preset', preset] + (['--appearance-json', json.dumps(custom)] if custom is not None else [])))
                 stack.enter_context(patch.dict(os.environ, {}, clear=False))
                 for name, value in [('ROOT', root), ('LIVE', Path(folder) / 'live'),
                                     ('LAB', Path(folder) / 'lab'), ('STABLE', Path(folder) / 'stable'),
@@ -102,9 +111,9 @@ class DailyGeometryTests(unittest.TestCase):
                     live_run.main()
             self.assertEqual(settings.call_args.kwargs['fps'], 60)
             from appearance_presets import resolve_appearance
-            appearance.assert_called_once_with(resolve_appearance('clean', {}))
+            appearance.assert_called_once_with(resolve_appearance(preset, {}, custom))
             manifest = json.loads((root/'runs'/'failure-check'/'manifest.json').read_text())
-            self.assertEqual(manifest['appearance_preset'], 'clean')
+            self.assertEqual(manifest['appearance_preset'], preset)
             self.assertIn(str(root/'appearance_presets.py'), manifest['dependencies'])
             self.assertFalse((root / 'active.json').exists())
             self.assertFalse((root / 'latest.json').exists())

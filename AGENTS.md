@@ -90,11 +90,19 @@ WS_EX_WINDOWEDGE on Windows; restoration tracks this verified side effect.
 handling for observed Windows sharing/access-denied races. No in-place JSON
 fallback. Normal daily sessions remain 120 FPS; `--fps 60` is explicit for the
 chain, and panel hotkeys have a separately verified UI identity from the owner.
-Chiaki one-click launches explicitly use `--appearance-preset clean` from
-`appearance_presets.py`: style1/auto-mask1/intensity1/tone0.25/local-structure0/
-skin-structure0. The preset is recorded in the manifest and its module is hashed.
-Ordinary daily/diagnostic launches retain inherited appearance unless requested;
-do not modify Core/Lab appearance.json. Paused-game NR/bypass/NR comparisons
+The NR appearance tab supplies both normal Start and the Chiaki chain, with
+Clean as its initial look: style1/auto-mask1/intensity1/tone0.25/local-structure0/
+skin-structure0. `appearance_presets.py` validates Clean/Faithful/Natural/Strong/
+Extreme/Custom; these are appearance profiles, not NVIDIA model/performance tiers.
+Slider edits mark Custom and retain style/auto-mask. Four numeric ranges are
+intensity0..1, tone0..2, local-structure0..2, skin-structure-1..2.5 (-1 Off).
+Editing is disabled while busy. Saved looks use ignored `nr-appearance.json`;
+strict duplicate/nonfinite/schema validation fails without overwriting bad data.
+Custom CLI values use `--appearance-json`, only with the custom preset. The
+chain request binds the selected look and saves it after LS output is verified;
+normal Start saves after preflight. Preset/values and module hash are manifested.
+CLI without an explicit appearance still inherits the old values. Never modify
+Core/Lab appearance.json. Paused-game NR/bypass/NR comparisons
 identified extra structure enhancement as a contributor to dark-area grain.
 Clean reduces that enhancement, not source resolution or overall NR intensity;
 it is not a blur filter or universal temporal/face denoising claim. Keep pixel

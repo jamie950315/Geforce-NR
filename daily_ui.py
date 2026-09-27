@@ -16,6 +16,7 @@ from ctypes import wintypes
 from pathlib import Path, PureWindowsPath
 from typing import Any
 from processing_support import NR_HEIGHTS
+from appearance_presets import APPEARANCE_LABELS, SLIDER_RANGES, preset_config, validate_appearance_config
 
 
 APP_TITLE = "Geforce NR"
@@ -286,6 +287,14 @@ class DailyApp:
         style.configure("TSeparator", background=border)
         style.configure('TCheckbutton', background=panel, foreground=text, font=('Segoe UI', 10))
         style.map('TCheckbutton', background=[('active', panel)], foreground=[('disabled', '#71817d')])
+        style.configure('TNotebook', background=bg, borderwidth=0)
+        style.configure('TNotebook.Tab', background=panel, foreground=text,
+                        font=('Segoe UI Semibold', 10), padding=(14, 7))
+        style.map('TNotebook.Tab', background=[('selected', panel_alt), ('active', panel_alt)])
+        style.configure('Horizontal.TScale', background=panel, troughcolor=panel_alt)
+        style.configure('TSpinbox', fieldbackground=panel_alt, foreground=text,
+                        background=panel_alt, arrowcolor=text, insertcolor=text)
+        style.map('TSpinbox', foreground=[('disabled', '#71817d')])
 
     def _create_variables(self) -> None:
         self.target_var = self.tk.StringVar()
@@ -305,6 +314,14 @@ class DailyApp:
         self.geometry_var = self.tk.StringVar(value="Not running")
         self.nr_status_var = self.tk.StringVar(value="Not confirmed")
         self.flow_status_var = self.tk.StringVar(value="Inactive")
+        self.appearance_preset_var = self.tk.StringVar()
+        self.appearance_warning_var = self.tk.StringVar()
+        self.appearance_vars = {field: self.tk.StringVar() for field in SLIDER_RANGES}
+        self.appearance_scale_vars = {field: self.tk.DoubleVar() for field in SLIDER_RANGES}
+        self._appearance_values = dict(preset_config('clean')['values'])
+        self._loading_appearance = False
+        for field, variable in self.appearance_vars.items():
+            variable.trace_add('write', lambda *_args, field=field: self._appearance_text_changed(field))
 
     def _build_ui(self) -> None:
         outer = self.ttk.Frame(self.root, style="App.TFrame", padding=(24, 16, 24, 14))
@@ -374,11 +391,13 @@ class DailyApp:
             command=self.start_chiaki_chain)
         self.chain_button.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(6, 0))
         self.ttk.Label(controls, style='Muted.TLabel', wraplength=730, justify='left',
-            text='Clean NR1080 → LS1 1440p → LSFG 2x · fixes DPI. Reduced structure enhancement; NR intensity retained.').grid(
+            text='NR1080 → LS1 1440p → LSFG 2x · fixes DPI. Uses the selected NR appearance; processing preset stays separate.').grid(
                 row=6, column=0, columnspan=3, sticky='ew', pady=(4, 0))
 
-        body = self.ttk.Frame(outer, style="App.TFrame")
-        body.grid(row=3, column=0, sticky="nsew")
+        self.body_notebook = self.ttk.Notebook(outer)
+        self.body_notebook.grid(row=3, column=0, sticky='nsew')
+        body = self.ttk.Frame(self.body_notebook, style="App.TFrame")
+        self.body_notebook.add(body, text='Processing')
         body.columnconfigure(0, weight=1, uniform="body")
         body.columnconfigure(1, weight=1, uniform="body")
         body.rowconfigure(0, weight=1)
@@ -446,6 +465,7 @@ class DailyApp:
         self.ttk.Label(status, textvariable=self.flow_status_var, style="Value.TLabel").grid(row=8, column=0, sticky="ew", pady=(3, 10))
         self.open_run_button = self.ttk.Button(status, text="Open run folder", command=self.open_run_folder)
         self.open_run_button.grid(row=9, column=0, sticky="ew")
+        self._build_appearance_tab()
 
         self.ttk.Label(
             outer,
@@ -457,6 +477,153 @@ class DailyApp:
             wraplength=740,
             justify="left",
         ).grid(row=4, column=0, sticky="ew", pady=(8, 0))
+
+    def _build_appearance_tab(self) -> None:
+        panel = self.ttk.Frame(self.body_notebook, style='Panel.TFrame', padding=12)
+        self.body_notebook.add(panel, text='NR appearance')
+        panel.columnconfigure(1, weight=1)
+        self.ttk.Label(panel, text='Appearance preset', style='Section.TLabel').grid(row=0, column=0, sticky='w')
+        self.appearance_preset_combo = self.ttk.Combobox(panel, textvariable=self.appearance_preset_var,
+            values=tuple(APPEARANCE_LABELS), state='readonly')
+        self.appearance_preset_combo.grid(row=0, column=1, columnspan=2, sticky='ew', padx=(12, 0))
+        self.appearance_preset_combo.bind('<<ComboboxSelected>>', self._appearance_preset_selected)
+        self.ttk.Label(panel, style='Muted.TLabel', wraplength=700, justify='left',
+            text='Applies to Start and Play Chiaki. Stop before editing; changes apply on the next launch.').grid(
+                row=1, column=0, columnspan=3, sticky='ew', pady=(8, 10))
+        labels = {'intensity': 'NR intensity', 'local_tone': 'Local tone',
+                  'local_structure': 'Local structure', 'skin_structure': 'Skin structure (-1 = Off)'}
+        self.appearance_controls = []
+        for row, (field, bounds) in enumerate(SLIDER_RANGES.items(), start=2):
+            self.ttk.Label(panel, text=labels[field], style='Body.TLabel').grid(row=row, column=0, sticky='w', pady=7)
+            slider = self.ttk.Scale(panel, from_=bounds[0], to=bounds[1], variable=self.appearance_scale_vars[field],
+                command=lambda value, field=field: self._appearance_slider_changed(field, value))
+            slider.bind('<Button-1>', lambda event, field=field: self._appearance_slider_click(field, event))
+            for key in ('Left', 'Right', 'Up', 'Down', 'Home', 'End'):
+                slider.bind(f'<{key}>', lambda event, field=field: self._appearance_slider_key(field, event))
+            slider.grid(row=row, column=1, sticky='ew', padx=12, pady=7)
+            spin = self.ttk.Spinbox(panel, from_=bounds[0], to=bounds[1], increment=0.01,
+                textvariable=self.appearance_vars[field], width=7, format='%.2f')
+            spin.grid(row=row, column=2, sticky='e', pady=7)
+            self.appearance_controls.extend((slider, spin))
+        self.ttk.Label(panel, textvariable=self.appearance_warning_var, style='Muted.TLabel',
+            wraplength=700, justify='left').grid(row=6, column=0, columnspan=3, sticky='ew', pady=(6, 10))
+        save = self.ttk.Button(panel, text='Save NR appearance', command=self.save_appearance)
+        save.grid(row=7, column=0, columnspan=2, sticky='ew', padx=(0, 6))
+        reset = self.ttk.Button(panel, text='Reset to Clean', command=self.reset_appearance)
+        reset.grid(row=7, column=2, sticky='ew')
+        self.appearance_controls.extend((save, reset))
+
+    def _load_appearance_settings(self) -> None:
+        self._apply_appearance_to_form(getattr(self.controller, 'appearance_settings', preset_config('clean')))
+
+    def _apply_appearance_to_form(self, config) -> None:
+        config = validate_appearance_config(config)
+        self._loading_appearance = True
+        try:
+            self._appearance_values = dict(config['values'])
+            self.appearance_preset_var.set(next(label for label, key in APPEARANCE_LABELS.items() if key == config['preset']))
+            for field in SLIDER_RANGES:
+                value = config['values'][field]
+                formatted = f'{value:.2f}'
+                self.appearance_vars[field].set(formatted if float(formatted) == value else str(value))
+                self.appearance_scale_vars[field].set(value)
+        finally:
+            self._loading_appearance = False
+        self._update_appearance_warning()
+
+    def _appearance_from_form(self):
+        values = dict(self._appearance_values)
+        for field, variable in self.appearance_vars.items():
+            try:
+                values[field] = float(variable.get())
+            except (TypeError, ValueError):
+                raise ValueError(f'{field.replace("_", " ").title()} must be a number') from None
+        return validate_appearance_config(dict(preset=APPEARANCE_LABELS[self.appearance_preset_var.get()], values=values))
+
+    def _appearance_preset_selected(self, _event=None) -> None:
+        if self._controller_busy() or self._closing:
+            return
+        preset = APPEARANCE_LABELS[self.appearance_preset_var.get()]
+        if preset != 'custom':
+            self._apply_appearance_to_form(preset_config(preset))
+        else:
+            self._update_appearance_warning()
+
+    def _appearance_slider_changed(self, field, value) -> None:
+        if self._loading_appearance or self._controller_busy() or self._closing:
+            return
+        self.appearance_vars[field].set(f'{float(value):.2f}')
+
+    def _appearance_slider_click(self, field, event):
+        if self._loading_appearance or self._controller_busy() or self._closing:
+            return 'break'
+        if not event.widget.identify(event.x, event.y).endswith('trough'):
+            # Preserve the native slider-thumb press/drag/release bindings.
+            return None
+        event.widget.focus_set()
+        # Ttk maps widget coordinates through its theme-specific slider extent.
+        # Its default trough binding instead adds/subtracts 1, which is the
+        # entire intensity range and too coarse for the other NR parameters.
+        self._appearance_slider_changed(field, event.widget.get(event.x, event.y))
+        return 'break'
+
+    def _appearance_slider_key(self, field, event):
+        if self._loading_appearance or self._controller_busy() or self._closing:
+            return 'break'
+        try:
+            current = self._appearance_from_form()['values'][field]
+        except ValueError as exc:
+            # An invalid typed value stays visible until explicitly corrected.
+            self.appearance_warning_var.set(str(exc))
+            return 'break'
+        low, high = SLIDER_RANGES[field]
+        if event.keysym in {'Home', 'End'}:
+            value = low if event.keysym == 'Home' else high
+        elif event.keysym in {'Left', 'Right', 'Up', 'Down'}:
+            step = 0.01 if event.keysym in {'Right', 'Up'} else -0.01
+            value = min(high, max(low, current + step))
+        else:
+            return None
+        self._appearance_slider_changed(field, value)
+        return 'break'
+
+    def _appearance_text_changed(self, field) -> None:
+        if self._loading_appearance or self._controller_busy() or self._closing:
+            return
+        self.appearance_preset_var.set(next(label for label, key in APPEARANCE_LABELS.items() if key == 'custom'))
+        try:
+            config = self._appearance_from_form()
+        except ValueError as exc:
+            self.appearance_warning_var.set(str(exc))
+            return
+        self.appearance_scale_vars[field].set(config['values'][field])
+        self._update_appearance_warning()
+
+    def _update_appearance_warning(self) -> None:
+        try:
+            values = self._appearance_from_form()['values']
+        except ValueError as exc:
+            self.appearance_warning_var.set(str(exc))
+            return
+        warning = ('Strong structure enhancement can amplify grain, noise and edge artifacts.'
+                   if values['local_structure'] > 0.75 or values['skin_structure'] > 1
+                   else 'Structure enhancement changes detail emphasis; it is not a separate denoiser.')
+        if values['skin_structure'] == -1:
+            warning += ' Skin structure: Off.'
+        self.appearance_warning_var.set(warning)
+
+    def save_appearance(self) -> None:
+        try:
+            self.controller.save_appearance(self._appearance_from_form())
+            self.status_detail_var.set('NR appearance saved for future launches.')
+        except Exception as exc:
+            self.messagebox.showerror(APP_TITLE, f'Could not save NR appearance.\n\n{exc}')
+
+    def reset_appearance(self) -> None:
+        if self._controller_busy() or self._closing:
+            return
+        self._apply_appearance_to_form(preset_config('clean'))
+        self.status_detail_var.set('Clean appearance selected. Save it or start to apply it.')
 
     def _radio_row(
         self,
@@ -488,6 +655,7 @@ class DailyApp:
         except Exception:
             _write_error_log("Failed to read saved UI settings")
         self._apply_settings_to_form(saved)
+        self._load_appearance_settings()
 
     def _apply_settings_to_form(self, settings: dict[str, Any]) -> None:
         mode = settings.get("mode", "nr")
@@ -603,7 +771,11 @@ class DailyApp:
 
     def save_preferences(self) -> None:
         try:
-            self.controller.save_settings(self._settings_from_form())
+            from daily_backend import validated
+            settings = validated(self._settings_from_form())
+            appearance = self._appearance_from_form()
+            self.controller.save_settings(settings)
+            self.controller.save_appearance(appearance)
             self.status_detail_var.set("Preferences saved for future launches.")
             self._refresh_mask_status()
         except Exception as exc:
@@ -612,9 +784,11 @@ class DailyApp:
 
     def restore_recommended(self) -> None:
         self._apply_settings_to_form(RECOMMENDED_SETTINGS)
+        self._apply_appearance_to_form(preset_config('clean'))
         try:
             self.controller.save_settings(dict(RECOMMENDED_SETTINGS))
-            self.status_detail_var.set("Recommended NR720, flow height 720 (16:9), G2 Fast, mask off, SDR restored and saved.")
+            self.controller.save_appearance(self._appearance_from_form())
+            self.status_detail_var.set("Recommended NR720, flow height 720, G2 Fast, Clean appearance, mask off, SDR saved.")
             self._refresh_mask_status()
         except Exception as exc:
             _write_error_log("Failed to restore recommended settings")
@@ -627,7 +801,7 @@ class DailyApp:
             return
         try:
             settings = self._settings_from_form()
-            self.controller.start(target, settings)
+            self.controller.start(target, settings, appearance_config=self._appearance_from_form())
             self._last_state = "starting"
             self.status_state_var.set("STARTING")
             self.status_detail_var.set("Starting the isolated native pipeline…")
@@ -656,7 +830,7 @@ class DailyApp:
             self.messagebox.showwarning(APP_TITLE, 'Select a Chiaki window when multiple installations or an unrelated application are listed.')
             return
         try:
-            self.controller.start_chiaki_chain(target)
+            self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form())
             self._last_state = 'starting'
             self.status_state_var.set('STARTING')
             self.status_detail_var.set('Preparing Chiaki, physical-pixel sizing, NR and Lossless Scaling…')
@@ -797,6 +971,9 @@ class DailyApp:
         self.refresh_button.configure(state="disabled" if busy or self._closing else "normal")
         self.save_button.configure(state="disabled" if busy or self._closing else "normal")
         self.restore_button.configure(state="disabled" if busy or self._closing else "normal")
+        self.appearance_preset_combo.configure(state=settings_state)
+        for control in self.appearance_controls:
+            control.configure(state='disabled' if busy or self._closing else 'normal')
         self.hdr_check.configure(state="disabled" if busy or self._closing else "normal")
         self.hdr_mapping_combo.configure(state="readonly" if self.hdr_var.get() and not busy and not self._closing else "disabled")
         self.hdr_queued_check.configure(state="normal" if self.hdr_var.get()

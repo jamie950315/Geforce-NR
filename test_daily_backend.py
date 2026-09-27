@@ -7,22 +7,94 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from daily_backend import DEFAULTS, DailyController, atomic_json, validated, migrate_settings
+from appearance_presets import preset_config
 
 
 class DailyTests(unittest.TestCase):
+    def make_controller(self, root):
+        with patch.dict('sys.modules', {'gfn_core.windows': SimpleNamespace(Win32=lambda: Mock())}), \
+                patch.object(sys, 'path', list(sys.path)):
+            return DailyController(root)
+
+    def test_appearance_defaults_and_independent_persistence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            atomic_json(root/'daily-settings.json', DEFAULTS)
+            before = (root/'daily-settings.json').read_bytes()
+            controller = self.make_controller(root)
+            self.assertEqual(controller.appearance_settings, preset_config('clean'))
+            self.assertFalse((root/'nr-appearance.json').exists())
+            config = preset_config('faithful')
+            controller.save_appearance(config)
+            self.assertEqual((root/'daily-settings.json').read_bytes(), before)
+            config['values']['intensity'] = .1
+            self.assertEqual(controller.appearance_settings, preset_config('faithful'))
+            self.assertEqual(self.make_controller(root).appearance_settings, preset_config('faithful'))
+            controller.process = SimpleNamespace(poll=lambda: None)
+            with self.assertRaisesRegex(RuntimeError, 'Stop the current session'):
+                controller.save_appearance(preset_config('natural'))
+
+    def test_malformed_appearance_preserved_without_migration_or_overwrite(self):
+        payloads = ['broken', '{"preset":"clean","values":{}}',
+                    '{"preset":"clean","preset":"natural","values":{}}']
+        for payload in payloads:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                (root/'nr-appearance.json').write_text(payload)
+                with self.assertRaises(ValueError):
+                    self.make_controller(root)
+                self.assertEqual((root/'nr-appearance.json').read_text(), payload)
+                self.assertEqual({p.name for p in root.iterdir()}, {'nr-appearance.json'})
+
+    def test_custom_launch_roundtrip_and_persistence_after_preflight_only(self):
+        for persist in (False, True):
+            with self.subTest(persist=persist), tempfile.TemporaryDirectory() as folder:
+                c = self.make_controller(Path(folder))
+                config = preset_config('custom')
+                config['values'].update(style=2, auto_mask=0, intensity=.37, skin_structure=2.45)
+                target = dict(hwnd=123, pid=456, created=789, title='Game', width=1920, height=1080)
+                c._current_target = Mock(side_effect=RuntimeError('Invalid target'))
+                with self.assertRaisesRegex(RuntimeError, 'Invalid target'):
+                    c.start(target, DEFAULTS, persist=persist, appearance_config=config)
+                self.assertFalse(c.appearance_file.exists())
+                c._current_target = Mock(return_value=target)
+                c.win = SimpleNamespace(identity=lambda _: ('python', 10), u=SimpleNamespace(SetForegroundWindow=Mock(return_value=True)))
+                with patch('daily_backend.subprocess.Popen') as launch:
+                    c.start(target, DEFAULTS, persist=persist, appearance_config=config)
+                args = launch.call_args.args[0]
+                self.assertEqual(args[args.index('--appearance-preset')+1], 'custom')
+                self.assertEqual(json.loads(args[args.index('--appearance-json')+1]), config['values'])
+                self.assertEqual(c.appearance_file.exists(), persist)
+                if persist:
+                    self.assertEqual(json.loads(c.appearance_file.read_text()), config)
+                self.assertEqual(config['values']['intensity'], .37)
+
+    def test_invalid_appearance_rejected_before_target_or_chain(self):
+        c = DailyController.__new__(DailyController)
+        c.process = None
+        c._current_target = Mock(side_effect=AssertionError('No target access expected'))
+        malformed = dict(preset='clean', values={})
+        with self.assertRaises(ValueError):
+            c.start({}, DEFAULTS, appearance_config=malformed)
+        with self.assertRaises(ValueError):
+            c.start_chiaki_chain({}, appearance_config=malformed)
+        c._current_target.assert_not_called()
+
     def test_chain_cold_start_defers_target_discovery(self):
         c = DailyController.__new__(DailyController)
         c.root, c.win, c.process, c.chain = Path('/isolated'), Mock(), None, None
+        c.appearance_settings = preset_config('clean')
         c._current_target = Mock(side_effect=AssertionError('No existing target'))
         chain = SimpleNamespace(start=Mock())
         with patch.dict('sys.modules', {'chain_controller': SimpleNamespace(ChainController=lambda *args: chain)}):
             c.start_chiaki_chain()
         c._current_target.assert_not_called()
-        chain.start.assert_called_once_with(None)
+        chain.start.assert_called_once_with(None, appearance_config=preset_config('clean'))
 
     def test_chain_dispatch_routes_status_stop_and_blocks_preferences(self):
         c = DailyController.__new__(DailyController)
         c.root, c.win, c.process, c.chain = Path('/isolated'), Mock(), None, None
+        c.appearance_settings = preset_config('clean')
         target = dict(hwnd=1)
         c._current_target = Mock(return_value=target)
         chain = SimpleNamespace(busy=True, start=Mock(), stop=Mock(), poll=Mock(return_value={'state': 'running'}))
@@ -30,7 +102,7 @@ class DailyTests(unittest.TestCase):
         with patch.dict('sys.modules', {'chain_controller': SimpleNamespace(ChainController=factory)}):
             c.start_chiaki_chain(target)
         factory.assert_called_once_with(c.root, c.win)
-        chain.start.assert_called_once_with(target)
+        chain.start.assert_called_once_with(target, appearance_config=preset_config('clean'))
         self.assertTrue(c.busy)
         self.assertEqual(c.poll(), {'state': 'running', 'chain': True})
         with self.assertRaisesRegex(RuntimeError, 'Stop the current session'):

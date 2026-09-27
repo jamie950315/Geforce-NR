@@ -70,21 +70,55 @@ must be selected/connected in Chiaki first.
 
 The supervisor sets a physical **1920x1080 borderless** client/capture rectangle,
 including at 125% Windows scaling, without changing global display scaling. It
-then starts Clean NR1080 at 60 source FPS, optical flow 720/G2/Fast, Color-preserving
+then starts NR1080 at 60 source FPS with the selected appearance (initially Clean), optical flow 720/G2/Fast, Color-preserving
 queued HDR, and LS1 to 1440p with LSFG Fixed 2x / Performance / Flow Scale 75 /
 WGC / Queue Target 1 / Max Frame Latency 1. LS captures the verified NR output,
 not the original Chiaki window. NR and hardware flow must be active before LS
 starts. This is a near-120-FPS configuration, not a guarantee of locked 120 FPS,
 artifact-free motion, or low end-to-end input latency.
 
-The chain explicitly selects the `clean` NR appearance preset rather than
-inheriting aggressive Core/Lab detail settings. It retains NR intensity 1.0
+Clean retains NR intensity 1.0
 and local tone 0.25 while setting local and skin structure enhancement to zero.
 This reduces the observed grain added to smooth dark areas without applying a
 full-frame blur or disabling NR. It also reduces the extra texture enhancement;
 it is not a universal denoising or moving-face quality guarantee. Ordinary
-**Start** still uses the inherited appearance, and Core/Lab configuration files
-are never rewritten. Diagnostic CLI selection is `--appearance-preset clean`.
+**Start** and the Chiaki chain both use the **NR appearance** tab. Core/Lab
+configuration files are never rewritten. Diagnostic CLI defaults still inherit
+the existing appearance unless `--appearance-preset` is explicitly supplied.
+
+### NR appearance controls
+
+The **NR appearance** tab provides Clean, Faithful, Natural, Strong / Cinematic,
+Extreme / Overdrive, and Custom. These are application appearance profiles, not
+NVIDIA model selections or performance/quality tiers. Clean remains the initial
+choice to avoid restoring the previously observed high-grain look.
+
+| Control | Panel range | Purpose |
+|---|---|---|
+| NR intensity | 0.00–1.00 | Overall NR intensity |
+| Local tone | 0.00–2.00 | Local tonal adjustment |
+| Local structure | 0.00–2.00 | Additional detail emphasis; stronger values can increase grain |
+| Skin structure | -1.00–2.50 | Skin/detail control; -1 is Off in the inspected integration |
+
+Each slider has a numeric field with 0.01 increments. Editing a value switches
+the selection to Custom while preserving the profile's runtime style and auto
+mask. Invalid, non-finite, or out-of-range values block saving/launch; they are
+not silently clipped. The four controls and profile values follow the inspected
+integration's existing control contract, not a universal quality guarantee.
+
+Stop processing before editing. **Save NR appearance** stores the selected look
+in ignored `nr-appearance.json`; **Save preferences** stores processing and
+appearance choices. Both Start buttons use the current form values and save
+appearance after successful preflight (the chain waits for verified LS output).
+**Reset to Clean** changes the form; save or start to retain it. Strong presets
+show a grain warning. Saved Custom values survive reopening the panel.
+
+CLI presets include `clean`, `faithful`, `natural`, `strong`, `extreme`, and
+`custom`. The custom preset also requires `--appearance-json` with exactly the
+six fields `style`, `auto_mask`, `intensity`, `local_tone`, `local_structure`, and
+`skin_structure`. Duplicate/unknown/missing fields and non-finite values are
+rejected. Runtime style IDs and automatic masking remain part of each profile;
+the panel does not expose unverified render-preset hints.
 
 **Stop safely**, Ctrl+Alt+Q, opening the panel with Ctrl+Alt+F9, leaving the
 playback application, disconnecting the stream, or closing the panel stops the

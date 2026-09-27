@@ -1,6 +1,7 @@
 evidence/
 __pycache__/
 daily-settings.json
+nr-appearance.json
 daily-settings-before-optional-mask.json
 daily-settings-before-hdr.json
 daily-settings-before-hdr-color.json

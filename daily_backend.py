@@ -10,7 +10,8 @@ import time
 import uuid
 from application_windows import enumerate_application_windows
 from processing_support import NR_HEIGHTS
-from appearance_presets import APPEARANCE_PRESETS
+from appearance_presets import (APPEARANCE_PRESETS, appearance_cli_args, preset_config,
+                                strict_json_loads, validate_appearance_config)
 from shared_json import read_json
 
 DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False)
@@ -68,6 +69,10 @@ def migrate_settings(value):
 class DailyController:
     def __init__(self, root):
         self.root = Path(root).resolve()
+        self.appearance_file = self.root / 'nr-appearance.json'
+        self.appearance_settings = (validate_appearance_config(read_json(
+            self.appearance_file, loads=strict_json_loads))
+            if self.appearance_file.exists() else preset_config('clean'))
         self.preference_file = self.root / 'daily-settings.json'
         if self.preference_file.exists():
             previous = read_json(self.preference_file)
@@ -119,6 +124,14 @@ class DailyController:
         atomic_json(self.preference_file, value)
         self.settings = value
         self.detail = 'Preferences saved for future launches.'
+
+    def save_appearance(self, config):
+        value = validate_appearance_config(config)
+        if self.busy:
+            raise RuntimeError('Stop the current session before changing appearance')
+        atomic_json(self.appearance_file, value)
+        self.appearance_settings = value
+        self.detail = 'Appearance saved for future launches.'
 
     def _current_target(self, target):
         current = next((t for t in self.list_targets() if
@@ -196,27 +209,31 @@ class DailyController:
             raise RuntimeError('The window changed during capture; preview discarded')
         return dict(width=width, height=height, ppm=preview)
 
-    def start_chiaki_chain(self, target=None):
+    def start_chiaki_chain(self, target=None, appearance_config=None):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
+        appearance = validate_appearance_config(self.appearance_settings if appearance_config is None else appearance_config)
         current = self._current_target(target) if target is not None else None
         from chain_controller import ChainController
         chain = ChainController(self.root, self.win)
         # Retain ownership even if start raises after partially launching, so
         # the panel can still poll cleanup and request an authenticated stop.
         self.chain = chain
-        chain.start(current)
+        chain.start(current, appearance_config=appearance)
 
     def start(self, target, settings, *, persist=True, fps=120, panel_owner=None,
-              appearance_preset='inherited'):
+              appearance_preset='inherited', appearance_config=None):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
         if type(fps) is not int or fps not in (60, 120):
             raise ValueError('FPS must be 60 or 120')
         if type(persist) is not bool:
             raise ValueError('Preference persistence must be a boolean')
-        if appearance_preset not in APPEARANCE_PRESETS:
-            raise ValueError('Unsupported appearance preset')
+        appearance = validate_appearance_config(appearance_config) if appearance_config is not None else None
+        if appearance is None and (appearance_preset not in APPEARANCE_PRESETS or appearance_preset == 'custom'):
+            raise ValueError('Unsupported appearance preset or missing custom configuration')
+        appearance_args = (appearance_cli_args(appearance) if appearance is not None else
+                           ['--appearance-preset', appearance_preset])
         if panel_owner is not None and (not isinstance(panel_owner, tuple) or len(panel_owner) != 2
                 or any(type(part) is not int or part <= 0 for part in panel_owner)):
             raise ValueError('Panel owner must be a positive PID and process creation identity')
@@ -245,6 +262,8 @@ class DailyController:
                 raise RuntimeError('Another controller is active; it has been preserved. Stop it first.')
         if persist:
             self.save_settings(value)
+            if appearance is not None:
+                self.save_appearance(appearance)
         name = 'daily-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
         self.run = self.root/'runs'/name
         self.metrics = {}
@@ -255,13 +274,13 @@ class DailyController:
         args = [str(python), str(self.root/'live_run.py'), '--name', name,
                 '--hwnd', str(current['hwnd']), '--mode', value['mode'], '--seconds', '0', '--daily',
                 '--fps', str(fps),
-                '--appearance-preset', appearance_preset,
                 '--owner-pid', str(os.getpid()), '--owner-created', str(owner_created), '--owner-token', self.owner_token,
                 '--target-pid', str(current['pid']), '--target-created', str(current['created']),
                 '--target-title', current['title'], '--target-width', str(current['width']),
                 '--target-height', str(current['height']),
                 '--height', str(value['nr_height']), '--flow-width', str(value['flow_width']),
                 '--flow-grid', str(value['flow_grid']), '--flow-preset', value['flow_preset']]
+        args += appearance_args
         if panel_owner is not None:
             args += ['--panel-pid', str(panel_owner[0]), '--panel-created', str(panel_owner[1])]
         if value['mode'] == 'guard':

@@ -8,7 +8,7 @@ import sys
 import traceback
 from mask_profiles import validate_mask
 from application_windows import enumerate_application_windows
-from appearance_presets import APPEARANCE_PRESETS, resolve_appearance
+from appearance_presets import APPEARANCE_PRESETS, parse_appearance_json, resolve_appearance
 
 ROOT = Path(__file__).resolve().parent
 LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
@@ -109,6 +109,7 @@ def main():
     ap.add_argument('--seconds', type=int, default=60)
     ap.add_argument('--fps', type=int, choices=[60, 120], default=120)
     ap.add_argument('--appearance-preset', choices=APPEARANCE_PRESETS, default='inherited')
+    ap.add_argument('--appearance-json', help='Exact six-field JSON values; requires the custom appearance preset')
     ap.add_argument('--height', type=int, choices=NR_HEIGHTS, default=720)
     ap.add_argument('--flow-width', type=int, choices=[320, 640, 960, 1280], default=1280)
     ap.add_argument('--flow-grid', type=int, choices=[2, 4], default=2)
@@ -138,6 +139,12 @@ def main():
     ap.add_argument('--target-width', type=int)
     ap.add_argument('--target-height', type=int)
     a = ap.parse_args()
+    if (a.appearance_preset == 'custom') != (a.appearance_json is not None):
+        ap.error('--appearance-json is required only with --appearance-preset custom')
+    try:
+        custom_appearance = parse_appearance_json(a.appearance_json) if a.appearance_json is not None else None
+    except ValueError as exc:
+        ap.error(str(exc))
     if ((a.panel_pid is not None or a.panel_created is not None)
             and (not a.daily or not a.panel_pid or not a.panel_created
                  or a.panel_pid <= 0 or a.panel_created <= 0)):
@@ -240,7 +247,7 @@ def main():
     if a.mask:
         mask = dict(path=str(a.mask.resolve()), sha256=digest(a.mask))
         os.environ['GFN_HUD_MASK'] = mask['path']
-    appearance = Appearance.from_dict(resolve_appearance(a.appearance_preset, load(LAB / 'appearance.json')))
+    appearance = Appearance.from_dict(resolve_appearance(a.appearance_preset, load(LAB / 'appearance.json'), custom_appearance))
     settings = Settings(fps=a.fps, nr_height=a.height, duration=a.seconds,
                         bypass=a.mode == 'bypass', profile_frames=not a.daily,
                         appearance=appearance, pacing='source', capture_wait_ms=16,

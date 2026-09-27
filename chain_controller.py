@@ -13,6 +13,7 @@ import sys
 import time
 import uuid
 from shared_json import read_json as read
+from appearance_presets import APPEARANCE_LABELS, preset_config, validate_appearance_config
 
 
 def atomic(path, data):
@@ -52,16 +53,17 @@ class ChainController:
     def busy(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, target):
+    def start(self, target, appearance_config=None):
         if self.busy:
             raise RuntimeError('This panel already owns a Chiaki chain')
+        appearance = validate_appearance_config(appearance_config if appearance_config is not None else preset_config('clean'))
         python = self.root.parent/'gfn-nr-overlay/.venv/Scripts/pythonw.exe'
         if not python.is_file():
             raise RuntimeError('The Windows overlay Python runtime is required for Chiaki + LS')
         self.token = uuid.uuid4().hex
         self.job = self.root/'runs'/('chiaki-chain-'+time.strftime('%Y%m%d-%H%M%S')+'-'+self.token[:8])
         self.job.mkdir(parents=True)
-        request = dict(token=self.token, target=target, owner_pid=os.getpid(),
+        request = dict(token=self.token, target=target, appearance=appearance, owner_pid=os.getpid(),
                        owner_created=self.win.identity(os.getpid())[1])
         atomic(self.job/'request.json', request)
         self.last = dict(state='starting', detail='Checking Chiaki, HDR and Lossless Scaling...',
@@ -133,6 +135,8 @@ def supervise(root, folder):
     token = request.get('token')
     if not valid_token(token):
         raise RuntimeError('Invalid chain request token')
+    appearance = validate_appearance_config(request.get('appearance', preset_config('clean')))
+    appearance_label = next(label for label, key in APPEARANCE_LABELS.items() if key == appearance['preset'])
     controller = DailyController(root)
     win = controller.win
     native = NativeChain(root, win)
@@ -154,9 +158,9 @@ def supervise(root, folder):
             print(state+': '+detail, flush=True)
             last_detail[0] = detail
         value = dict(token=token, state=state, detail=detail, run=str(folder),
-            geometry='Chiaki 1920 x 1080 → Clean NR1080 → LS1 2560 x 1440 → LSFG 2x',
+            geometry=f'Chiaki 1920 x 1080 → NR1080 ({appearance_label}) → LS1 2560 x 1440 → LSFG 2x',
             nr_confirmed=False, hardware_flow_active=False, hdr_status='HDR / Color-preserving / queued',
-            chain_target=journal.get('target'))
+            chain_target=journal.get('target'), appearance=appearance)
         if snapshot:
             value.update(nr_confirmed=snapshot.get('nr_confirmed', False),
                          hardware_flow_active=snapshot.get('hardware_flow_active', False))
@@ -200,10 +204,10 @@ def supervise(root, folder):
         check_cancel()
         native.configure_ls(preflight, folder, lambda value: save('ls_config', value))
         check_cancel()
-        status('starting', 'Starting Clean NR1080 and hardware optical flow at 60 source FPS...')
+        status('starting', f'Starting NR1080 ({appearance_label}) and hardware optical flow at 60 source FPS...')
         preset = dict(DEFAULTS, nr_height=1080, hdr=True, hdr_mapping='color-preserving', hdr_queued=True)
         controller.start(target, preset, persist=False, fps=60,
-                         panel_owner=(request['owner_pid'], request['owner_created']), appearance_preset='clean')
+                         panel_owner=(request['owner_pid'], request['owner_created']), appearance_config=appearance)
         save('nr_run', str(controller.run));save('nr_owner_token', controller.owner_token)
         until = time.monotonic()+30
         while controller.busy and time.monotonic() < until:
@@ -240,6 +244,9 @@ def supervise(root, folder):
         output = native.start_scaling(renderer, ls_record, preflight['monitor_rect'])
         save('outputs', output)
         check_cancel()
+        # A failed preflight/launch must not replace the user's saved look.
+        atomic(root/'nr-appearance.json', appearance)
+        save('appearance', appearance)
         while True:
             if cancelled():
                 reason = 'owner_closed' if not alive(win, request['owner_pid'], request['owner_created']) else 'stop_requested'
@@ -276,7 +283,7 @@ def supervise(root, folder):
             if snapshot.get('state') == 'suspended':
                 reason = 'capture_suspended'
                 break
-            status('running', 'Chiaki + Clean NR1080 + LS1 + LSFG 2x active. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens the panel.', snapshot)
+            status('running', f'Chiaki + NR1080 ({appearance_label}) + LS1 + LSFG 2x active. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens the panel.', snapshot)
             time.sleep(.5)
     except InterruptedError:
         reason = 'stop_requested'

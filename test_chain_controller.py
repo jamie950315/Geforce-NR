@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from chain_controller import ChainController, alive, atomic, job_path, recover, valid_token
 from shared_json import read_json
+from appearance_presets import preset_config
 
 
 class ChainOwnershipTests(unittest.TestCase):
@@ -54,6 +55,7 @@ class ChainOwnershipTests(unittest.TestCase):
                 c.start(dict(hwnd=1,pid=2,created=3,title='chiaki-ng'))
             self.assertTrue(c.busy)
             self.assertEqual(json.loads((c.job/'request.json').read_text())['token'],c.token)
+            self.assertEqual(json.loads((c.job/'request.json').read_text())['appearance'],preset_config('clean'))
             c.stop()
             self.assertEqual(json.loads((c.job/'stop.json').read_text()),{'token':c.token})
             with self.assertRaises(RuntimeError):c.start({})
@@ -66,6 +68,21 @@ class ChainOwnershipTests(unittest.TestCase):
         c.last=dict(state='running',nr_confirmed=True)
         self.assertEqual(c.poll()['state'],'error')
         self.assertFalse(c.poll()['nr_confirmed'])
+
+    def test_custom_appearance_is_bound_to_request_without_early_save(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)/'app';root.mkdir()
+            runtime=root.parent/'gfn-nr-overlay/.venv/Scripts/pythonw.exe'
+            runtime.parent.mkdir(parents=True);runtime.touch()
+            config=preset_config('clean');config['preset']='custom';config['values']['intensity']=.65
+            c=ChainController(root,SimpleNamespace(identity=lambda pid:('python',123)))
+            process=Mock();process.poll.return_value=None
+            with patch('chain_controller.subprocess.Popen',return_value=process):
+                c.start(None,appearance_config=config)
+            self.assertEqual(json.loads((c.job/'request.json').read_text())['appearance'],config)
+            self.assertFalse((root/'nr-appearance.json').exists())
+            config['values']['intensity']=.1
+            self.assertEqual(json.loads((c.job/'request.json').read_text())['appearance']['values']['intensity'],.65)
 
     def test_recovery_never_touches_live_foreign_chain(self):
         with tempfile.TemporaryDirectory() as d:
