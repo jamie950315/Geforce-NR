@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from PIL import Image
 
 from compare_hud_pairs import main
 
@@ -55,6 +56,20 @@ class ComparisonTests(unittest.TestCase):
             self.assertAlmostEqual(result['rows'][0]['roi_rgb_mae'], 50/3)
             self.assertEqual(result['rows'][0]['guard_roi_max'], 0)
             self.assertIn('pixel_validation_sha256', result)
+            original_read = Path.read_bytes
+            replaced = []
+            def replace_after_read(path):
+                blob = original_read(path)
+                if path == pairs/'30-source.rgba' and not replaced:
+                    path.write_bytes(bytes([101, 200, 50, 255]))
+                    replaced.append(True)
+                return blob
+            with patch.object(Path, 'read_bytes', replace_after_read), \
+                    patch('sys.argv', ['compare_hud_pairs.py', folder]):
+                main()
+            with Image.open(root/'hud-comparison/source.png') as rendered:
+                self.assertEqual(rendered.getpixel((0, 0)), (100, 200, 50))
+            (pairs/'30-source.rgba').write_bytes(bytes([100, 200, 50, 255]))
             regions.write_text(json.dumps({'../escape': [0, 0, 1, 1]}))
             with patch('sys.argv', ['compare_hud_pairs.py', folder, '--regions', str(regions)]):
                 with self.assertRaisesRegex(ValueError, 'Unsafe region output name'):

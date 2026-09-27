@@ -6,6 +6,7 @@ import time
 import win32api
 import win32con
 import win32gui
+import win32process
 from PIL import ImageGrab
 from gfn_window_identity import is_gfn_window
 
@@ -25,7 +26,7 @@ def checked_game_window():
             or (width, height) != (2560, 1440) or left > 0 or top > 0
             or right < width or bottom < height):
         raise RuntimeError('A full-screen GFN game must be foreground')
-    return hwnd
+    return hwnd, win32process.GetWindowThreadProcessId(hwnd), title, (left, top, right, bottom)
 
 
 target = checked_game_window()
@@ -40,6 +41,8 @@ for i in range(12):
     if checked_game_window() != target:
         raise RuntimeError('GFN game window changed')
     image=ImageGrab.grab(bbox=(0, 0, 2560, 1440))
+    if checked_game_window() != target:
+        raise RuntimeError('GFN game window changed during capture; image discarded')
     if image.size != (2560,1440):
         raise RuntimeError('Desktop geometry changed')
     path=out/f'frame-{i:03d}.png'

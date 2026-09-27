@@ -30,11 +30,18 @@ def evaluate(text, outcome, mode, duration):
     if len(rows) < 2:
         return dict(passed=False, reason='Insufficient steady frames')
     times = [float(r['present-call']) for r in rows]
+    if any(not math.isfinite(t) for t in times) or any(b <= a for a, b in zip(times, times[1:])):
+        return dict(passed=False, reason='Present timestamps must be finite and strictly increasing')
     intervals = [b - a for a, b in zip(times, times[1:])]
     ages = [float(r['source-age']) for r in rows]
     states = [r.get('source-state', 'valid' if float(r['source-age']) >= 0 else 'invalid') for r in rows]
-    signed_deltas = [float(r.get('source-delta', r['source-age'])) for r,s in zip(rows,states) if s in ('valid','future-at-present')]
-    latency_ages = [age for age,state in zip(ages,states) if state == 'valid' and age >= 0]
+    deltas = [float(r.get('source-delta', r['source-age'])) for r in rows]
+    consistent = [math.isfinite(age) and math.isfinite(delta) and (
+        (state == 'valid' and age >= 0 and delta >= 0) or
+        (state == 'future-at-present' and age <= 0 and delta <= 0))
+        for age, delta, state in zip(ages, deltas, states)]
+    signed_deltas = [delta for delta, ok in zip(deltas, consistent) if ok]
+    latency_ages = [age for age, state, ok in zip(ages, states, consistent) if ok and state == 'valid']
     captures = [int(r['capture']) for r in rows]
     sources = [int(r['source-qpc']) for r in rows]
     generations = {r['generation'] for r in rows}
@@ -50,7 +57,7 @@ def evaluate(text, outcome, mode, duration):
                    source_age_ms=dict(p95=quantile(latency_ages,.95), p99=quantile(latency_ages,.99)),
                    signed_source_to_present_ms=dict(minimum=min(signed_deltas) if signed_deltas else None,p95=quantile(signed_deltas,.95)),
                    future_source_samples=states.count('future-at-present'),
-                   invalid_source_ages=sum(s not in ('valid','future-at-present') for s in states), full_second_min=min(buckets) if buckets else None,
+                   invalid_source_ages=consistent.count(False), full_second_min=min(buckets) if buckets else None,
                    full_seconds=len(buckets), fresh_frames=len(rows))
     checks = dict(normal_exit=outcome.get('exit_code') == 0 and outcome.get('state') == 'duration_complete',
         sufficient_duration=seconds >= (590 if duration >= 600 else 30),

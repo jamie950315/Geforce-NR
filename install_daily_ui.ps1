@@ -31,6 +31,28 @@ if ($Check) {
     Write-Output 'Daily UI layout and on-demand launcher task are present. No changes were made.'
     return
 }
+# Validate all task ownership before changing any shortcut or task registration.
+function Assert-OwnedInactiveTask($Task, [string]$ExpectedPython, [string]$ExpectedScript) {
+    if (!$Task) { return }
+    if ($Task.State -in @('Running', 'Queued') -or $Task.Triggers -or
+        $Task.Actions.Count -ne 1 -or $Task.Actions[0].Execute -ne $ExpectedPython -or
+        $Task.Actions[0].WorkingDirectory -ne $root -or
+        $Task.Actions[0].Arguments -ne ('"' + $ExpectedScript + '"')) {
+        throw 'Existing task is active or unrelated; preserved before installation'
+    }
+}
+$taskName = 'Geforce-NR-Panel'
+$old = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+Assert-OwnedInactiveTask $old $python $script
+$legacyTasks = @(
+    @{Name='GFN-HUD-Guard-Panel'; Script=$script; Python=$python},
+    @{Name='GFN-HUD-Guard-UI-Probe'; Script=(Join-Path $root 'daily_ui_probe.py');
+      Python=(Join-Path $parent 'gfn-nr-overlay\.venv\Scripts\pythonw.exe')}
+)
+foreach ($entry in $legacyTasks) {
+    $entry.Task = Get-ScheduledTask -TaskName $entry.Name -ErrorAction SilentlyContinue
+    Assert-OwnedInactiveTask $entry.Task $entry.Python $entry.Script
+}
 $desktop = [Environment]::GetFolderPath('Desktop')
 $linkPath = Join-Path $desktop 'Geforce NR.lnk'
 $shell = New-Object -ComObject WScript.Shell
@@ -55,27 +77,15 @@ $link.IconLocation = 'C:\Windows\System32\shell32.dll,17'
 $link.Save()
 
 # An on-demand interactive launcher is used for remote validation, never autostart.
-$taskName = 'Geforce-NR-Panel'
-$old = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if ($old -and ($old.State -eq 'Running' -or $old.Actions.Arguments -ne ('"' + $script + '"'))) {
-    throw 'Existing panel task is active or unrelated; preserved'
-}
 $principal = $launcherTask.Principal
 $action = New-ScheduledTaskAction -Execute $python -Argument ('"' + $script + '"') -WorkingDirectory $root
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
 
 # Migrate only this deployment's inactive, on-demand legacy task registrations.
-foreach ($entry in @(
-    @{Name='GFN-HUD-Guard-Panel'; Script=$script},
-    @{Name='GFN-HUD-Guard-UI-Probe'; Script=(Join-Path $root 'daily_ui_probe.py')}
-)) {
-    $legacy = Get-ScheduledTask -TaskName $entry.Name -ErrorAction SilentlyContinue
+foreach ($entry in $legacyTasks) {
+    $legacy = $entry.Task
     if (!$legacy) { continue }
-    if ($legacy.State -eq 'Running' -or $legacy.Triggers -or
-        !$legacy.Actions.Arguments.StartsWith('"' + $entry.Script + '"')) {
-        throw ('Legacy task is active or unrelated; preserved: ' + $entry.Name)
-    }
     $backupDir = Join-Path $root 'evidence\task-name-migration'
     New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
     $backup = Join-Path $backupDir ($entry.Name + '.xml')

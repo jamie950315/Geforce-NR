@@ -17,8 +17,23 @@ from gfn_window_identity import is_gfn_window
 ROOT = Path(__file__).resolve().parent
 
 
+def capture_panel(hwnd, rect):
+    def unchanged():
+        return (win32gui.IsWindow(hwnd) and win32gui.GetForegroundWindow() == hwnd
+                and win32gui.GetWindowRect(hwnd) == rect)
+    if not unchanged():
+        return False
+    identity = win32process.GetWindowThreadProcessId(hwnd)
+    image = ImageGrab.grab(bbox=rect)
+    if not unchanged() or win32process.GetWindowThreadProcessId(hwnd) != identity:
+        return False
+    image.save(ROOT/'daily-probe.png')
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--request-id')
     ap.add_argument('--click', nargs=2, type=int)
     ap.add_argument('--key', choices=['home', 'down', 'enter', 'escape', 'end', 'delete'])
     ap.add_argument('--close', action='store_true')
@@ -31,6 +46,10 @@ def main():
     ap.add_argument('--numeric-value')
     ap.add_argument('--discard-changes', choices=['yes', 'no'])
     args = ap.parse_args()
+    def write_result(value):
+        value['request_id'] = args.request_id
+        value.setdefault('screenshot_captured', False)
+        (ROOT/'daily-probe.json').write_text(json.dumps(value, indent=2), encoding='utf-8')
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     if args.panel_hotkey:
         foreground = win32gui.GetForegroundWindow()
@@ -70,13 +89,13 @@ def main():
             raise RuntimeError('Expected confirmation button is missing')
         win32gui.SendMessage(button, win32con.BM_CLICK, 0, 0)
         time.sleep(1)
-        (ROOT/'daily-probe.json').write_text(json.dumps(dict(discard_answer=args.discard_changes, editor_exists=bool(win32gui.IsWindow(hwnd)))))
+        write_result(dict(discard_answer=args.discard_changes, editor_exists=bool(win32gui.IsWindow(hwnd))))
         return
     if args.panel_hotkey:
         rect = win32gui.GetWindowRect(hwnd)
-        (ROOT/'daily-probe.json').write_text(json.dumps(dict(panel_focused=win32gui.GetForegroundWindow() == hwnd,
-            pid=win32process.GetWindowThreadProcessId(hwnd)[1], rect=rect)))
-        ImageGrab.grab(bbox=rect).save(ROOT/'daily-probe.png')
+        write_result(dict(panel_focused=win32gui.GetForegroundWindow() == hwnd,
+            pid=win32process.GetWindowThreadProcessId(hwnd)[1], rect=rect,
+            screenshot_captured=capture_panel(hwnd, rect)))
         return
     if args.confirm_close:
         dialogs = []
@@ -93,7 +112,7 @@ def main():
             raise RuntimeError('Expected this panel\'s explicit stop-and-close confirmation')
         win32gui.PostMessage(dialogs[0], win32con.WM_COMMAND, win32con.IDYES, 0)
         time.sleep(2)
-        (ROOT/'daily-probe.json').write_text(json.dumps(dict(close_confirmed=True, panel_exists=bool(win32gui.IsWindow(hwnd)))))
+        write_result(dict(close_confirmed=True, panel_exists=bool(win32gui.IsWindow(hwnd))))
         return
     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
     focus_error = None
@@ -168,8 +187,8 @@ def main():
     time.sleep(1)
     info = dict(hwnd=hwnd, pid=win32process.GetWindowThreadProcessId(hwnd)[1] if win32gui.IsWindow(hwnd) else None,
                 rect=rect, foreground=win32gui.GetForegroundWindow(), focus_error=focus_error)
-    (ROOT/'daily-probe.json').write_text(json.dumps(info, indent=2))
-    ImageGrab.grab(bbox=rect).save(ROOT/'daily-probe.png')
+    info['screenshot_captured'] = capture_panel(hwnd, rect)
+    write_result(info)
 
 
 if __name__ == '__main__':

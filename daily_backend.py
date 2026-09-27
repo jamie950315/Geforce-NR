@@ -162,7 +162,12 @@ class DailyController:
         x, y, width, height = self.win.rect(current['hwnd'])
         if (width, height) != (target['width'], target['height']):
             raise ValueError('Game size changed during capture. Refresh and capture again.')
-        return dict(width=width, height=height, ppm=capture_rectangle(x, y, width, height))
+        preview = capture_rectangle(x, y, width, height)
+        self._current_target(current)
+        if (self.win.u.GetForegroundWindow() != current['hwnd']
+                or self.win.rect(current['hwnd']) != (x, y, width, height)):
+            raise RuntimeError('The game changed during capture; preview discarded')
+        return dict(width=width, height=height, ppm=preview)
 
     def start(self, target, settings):
         if self.busy:

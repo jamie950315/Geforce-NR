@@ -21,16 +21,18 @@ def capture_metadata(pairs):
         meta = json.loads(path.read_text(encoding='utf-8'))
         required = dict(schema=1, capture_kind='wgc', same_command_list=True,
                         source_fresh=True, nvofa_used=True, hud_guard=True)
-        if any(meta.get(key) != value for key, value in required.items()):
+        if any(type(meta.get(key)) is not type(value) or meta[key] != value
+               for key, value in required.items()):
             raise ValueError('Comparison requires verified fresh same-command-list WGC/NVOFA frames')
         for key in ('width', 'height', 'hwnd', 'frame_index', 'capture_serial',
                     'source_qpc', 'copy_submission_fence'):
             if type(meta.get(key)) is not int or meta[key] <= 0:
                 raise ValueError(f'{path.name}: invalid {key}')
         files = [local_artifact(pairs, meta[key]) for key in ('source', 'pre_hud', 'post_hud')]
-        if any(file in used_files for file in files) or len(set(files)) != 3:
+        resolved = {file.resolve() for file in files}
+        if used_files.intersection(resolved) or len(resolved) != 3:
             raise ValueError('Capture files must be unique across all three frames')
-        used_files.update(files)
+        used_files.update(resolved)
         expected_bytes = meta['width'] * meta['height'] * 4
         if any(file.stat().st_size != expected_bytes for file in files):
             raise ValueError('Invalid packed frame length')
@@ -57,7 +59,8 @@ def verify_validation(run, captures, manifest, manifest_sha256):
     path = run/'live-pair-result.json'
     if not path.is_file():
         raise ValueError('Run validate_live_pairs.py before comparing captured frames')
-    validated = json.loads(path.read_text(encoding='utf-8'))
+    validation_bytes = path.read_bytes()
+    validated = json.loads(validation_bytes.decode('utf-8'))
     if validated.get('run_manifest_sha256') != manifest_sha256:
         raise ValueError('Run manifest changed after pixel validation')
     width, height = captures[0][0]['width'], captures[0][0]['height']
@@ -71,6 +74,7 @@ def verify_validation(run, captures, manifest, manifest_sha256):
     by_frame = {row.get('frame_index'): row for row in rows if isinstance(row, dict)}
     if len(by_frame) != len(captures):
         raise ValueError('Pixel validation has missing or duplicate frame identities')
+    verified_blobs = {}
     for meta, paths in captures:
         row = by_frame.get(meta['frame_index'])
         if (not isinstance(row, dict) or row.get('passed') is not True
@@ -82,10 +86,12 @@ def verify_validation(run, captures, manifest, manifest_sha256):
             raise ValueError('Pixel validation has no file hashes')
         for key, frame_path in zip(('source', 'pre_hud', 'post_hud'), paths):
             expected = files.get(key)
+            blob = frame_path.read_bytes()
             if (not isinstance(expected, dict) or expected.get('name') != frame_path.name
-                    or expected.get('sha256') != hashlib.sha256(frame_path.read_bytes()).hexdigest()):
+                    or expected.get('sha256') != hashlib.sha256(blob).hexdigest()):
                 raise ValueError('Captured frame changed after pixel validation')
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+            verified_blobs[frame_path] = blob
+    return hashlib.sha256(validation_bytes).hexdigest(), verified_blobs
 
 
 def main():
@@ -114,7 +120,7 @@ def main():
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes.decode('utf-8-sig'))
     manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
-    validation_sha256 = verify_validation(args.run, captures, manifest, manifest_sha256)
+    validation_sha256, verified_blobs = verify_validation(args.run, captures, manifest, manifest_sha256)
     out.mkdir(exist_ok=True)
     results = []
     frame_records = []
@@ -123,7 +129,7 @@ def main():
         frames = {}
         files = {}
         for key, path in zip(('source', 'pre_hud', 'post_hud'), paths):
-            blob = path.read_bytes()
+            blob = verified_blobs.pop(path)
             frames[key] = Image.frombytes('RGBA', (width, height), blob).convert('RGB')
             files[key] = dict(name=path.name, sha256=hashlib.sha256(blob).hexdigest())
         frame_records.append(dict(frame_index=meta['frame_index'], capture_serial=meta['capture_serial'],

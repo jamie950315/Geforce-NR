@@ -3,11 +3,29 @@ from pathlib import Path
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from daily_backend import DEFAULTS, DailyController, atomic_json, validated, migrate_settings
 
 
 class DailyTests(unittest.TestCase):
+    def test_preview_is_discarded_if_foreground_changes_during_capture(self):
+        with tempfile.TemporaryDirectory() as folder:
+            c = DailyController.__new__(DailyController)
+            c.root = Path(folder)
+            c.process = None
+            target = dict(hwnd=1, width=2560, height=1440)
+            foreground = [1]
+            c._current_target = lambda value: target
+            c.win = SimpleNamespace(rect=lambda hwnd: (0, 0, 2560, 1440),
+                u=SimpleNamespace(SetForegroundWindow=Mock(), GetForegroundWindow=lambda: foreground[0]))
+            def capture(*args):
+                foreground[0] = 2
+                return b'private pixels must not reach the editor'
+            with patch('window_preview.capture_rectangle', side_effect=capture), patch('time.sleep'):
+                with self.assertRaisesRegex(RuntimeError, 'preview discarded'):
+                    c.capture_target(target)
+
     def test_mask_status_empty_profile_blocks_only_enabled_mask(self):
         c = DailyController.__new__(DailyController)
         c.load_mask_profile = lambda target: None

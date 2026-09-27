@@ -23,6 +23,10 @@ interactive scheduled launcher. The isolated launcher defaults to `native-repair
 with the timestamp-contract fix; original Core/Lab/Guard binaries remain intact.
 The on-demand diagnostic launcher restores its saved scheduled action to an
 inert Python command after dispatch; the running task continues unchanged.
+`task_control.ps1` serializes task changes across Windows sessions and tracks
+the exact dispatched instance. Queued tasks are preserved; probe JSON requires
+the current request ID. Never substitute a previous result or stop a different
+instance during cleanup.
 Arrival gaps and GFN stream loss still fail throughput gates; do not claim a
 completed 120 FPS soak. Never treat the GFN VPN label as proof of exit-node routing.
 The 25 Mbps experiment is restored to 100 Mbps. See README.md for measured limits.
@@ -74,6 +78,10 @@ or failure. `desktop_probe.py` binds GFN metadata, input, and screenshots to a
 GFN executable and captures a fresh screenshot only with a foreground GFN
 window covering the screen. It crops below the GFN window when a taskbar is
 exposed; check `screenshot_captured` before using the ignored `desktop.png`.
+Clicks must hit the same GFN top-level window. Captures and editor previews
+recheck foreground and target identity/geometry before saving or displaying pixels.
+The UI probe does not capture a closed or unfocused panel; always check its
+`screenshot_captured` result before reading an older `daily-probe.png`.
 `probe_daily_ui.ps1` also restores its neutral on-demand action after either
 result; a failed probe must not leave a prior click or key as the saved action.
 The panel-hotkey probe requires a GFN process window other than the client home
@@ -99,9 +107,11 @@ broad perceptual claims. Keep this game video only in ignored local run output.
 Two PC Building Simulator 2 NR-only runs (20 and 30 seconds) confirm NR,
 hardware flow, and 2560x1440 WGC/output with 1280x720 processing, but have
 only about 59 host exchanges/s. The session preflight reported 9.7% packet loss
-and 93 ms latency. A separate three-second, 79-frame camera-motion composition
+and 93 ms latency. A separate three-second, 79-frame view/object-motion composition
 clip has visible blockiness whose source is unresolved; keep it in ignored run
 output and do not use it for timing or general image-quality acceptance.
+The right-button interaction picked up the case (the placement prompt is visible);
+this sequence is not a camera-only test.
 GDI window capture of the GFN and NR output HWNDs returned black; desktop
 composition capture can include unrelated apps unless GFN is verified full-screen
 and foreground before and after the bounded capture.
@@ -111,6 +121,9 @@ before recording each raw desktop sample.
 capture under ignored run output only after a passing `live-pair-result.json`;
 the validator binds the complete run manifest hash, and comparison checks the
 run target, mask, capture identities, and raw-file hashes before output.
+The validator requires strictly typed, positive capture/fence identities and
+distinct frame files. Render comparisons from the verified byte snapshots;
+re-reading changed files after hash validation invalidates that guarantee.
 
 `mask_editor.py` captures an in-memory, visible-window SDR preview only while
 renderers are stopped. Integer subsampling uses exact source-pixel coordinates.

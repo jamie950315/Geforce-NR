@@ -41,6 +41,22 @@ class TimingTests(unittest.TestCase):
         self.assertFalse(result['passed'])
         self.assertFalse(result['checks']['interval_max'])
 
+    def test_one_mislabeled_negative_age_cannot_hide_in_good_samples(self):
+        for values in ('source-age=-3 source-state=valid', 'source-age=nan source-state=valid',
+                       'source-age=5 source-delta=-3 source-state=valid'):
+            with self.subTest(values=values):
+                text = sample().splitlines()
+                text[1000] = text[1000].replace('source-age=5', values)
+                result = evaluate('\n'.join(text), dict(exit_code=0, state='duration_complete'), 'nr', 40)
+                self.assertFalse(result['passed'])
+                self.assertEqual(result['invalid_source_ages'], 1)
+
+    def test_backward_present_timestamp_is_rejected(self):
+        text = sample().splitlines()
+        text[1000] = text[1000].replace('present-call=8333.333333', 'present-call=8320.000000')
+        result = evaluate('\n'.join(text), dict(exit_code=0, state='duration_complete'), 'nr', 40)
+        self.assertFalse(result['passed'])
+
     def test_explicit_future_is_retained_not_clamped_for_bypass(self):
         text=sample().replace('result=enhanced','result=bypass').replace('source-age=5','source-age=-3 source-delta=-3 source-state=future-at-present')
         result=evaluate(text,dict(exit_code=0,state='duration_complete'),'bypass',40)

@@ -16,6 +16,7 @@ from gfn_window_identity import is_gfn_window
 
 ROOT = Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
+ap.add_argument('--request-id')
 ap.add_argument('--focus-gfn', action='store_true')
 ap.add_argument('--click', nargs=2, type=int)
 ap.add_argument('--key', choices=['escape', 'space', 'enter', 'up', 'down', 'stats', 'advanced', 'overlay'])
@@ -33,7 +34,7 @@ def visit(hwnd, _):
 
 
 win32gui.EnumWindows(visit, None)
-result = dict(pid=os.getpid(), windows=rows)
+result = dict(pid=os.getpid(), windows=rows, request_id=args.request_id)
 if args.focus_gfn:
     targets = [r for r in rows if r['title'] == 'GeForce NOW' and is_gfn_window(r['hwnd'])]
     if len(targets) == 1:
@@ -58,7 +59,17 @@ if args.click or args.key:
     if not is_gfn_window(foreground):
         raise RuntimeError('Refusing click outside the observed GFN window')
     if args.click:
+        x, y = args.click
+        left, top, right, bottom = win32gui.GetWindowRect(foreground)
+        hit = win32gui.WindowFromPoint((x, y))
+        if (not (left <= x < right and top <= y < bottom)
+                or win32gui.GetAncestor(hit, 2) != foreground
+                or win32gui.GetForegroundWindow() != foreground):
+            raise RuntimeError('Refusing click outside the unobstructed GFN window')
         win32api.SetCursorPos(tuple(args.click))
+        if (win32gui.GetForegroundWindow() != foreground
+                or win32gui.GetAncestor(win32gui.WindowFromPoint((x, y)), 2) != foreground):
+            raise RuntimeError('GFN lost the click target; input refused')
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
     else:
@@ -86,7 +97,14 @@ if (result['foreground_is_gfn'] and left <= 0 and top <= 0
         and right >= screen_width and bottom >= screen_height - 80):
     try:
         capture_bottom = min(screen_height, bottom)
+        capture_process = win32process.GetWindowThreadProcessId(result['foreground'])
         im = ImageGrab.grab(bbox=(0, 0, screen_width, capture_bottom))
+        if (win32gui.GetForegroundWindow() != result['foreground']
+                or not is_gfn_window(result['foreground'])
+                or win32process.GetWindowThreadProcessId(result['foreground']) != capture_process
+                or win32gui.GetWindowText(result['foreground']) != foreground_title
+                or win32gui.GetWindowRect(result['foreground']) != (left, top, right, bottom)):
+            raise RuntimeError('GFN changed during capture; image discarded')
         im.save(ROOT / 'desktop.png')
         result['screenshot_size'] = im.size
         result['screenshot_bounds'] = [0, 0, screen_width, capture_bottom]

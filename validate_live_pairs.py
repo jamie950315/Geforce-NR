@@ -36,6 +36,7 @@ def local_artifact(directory: Path, name: object) -> Path:
 
 def validate(directory: Path, mask_path: Path) -> dict:
     mask, mask_w, mask_h = load_mask(mask_path)
+    mask_sha256 = hashlib.sha256(struct.pack('<4I', HGM1, 1, mask_w, mask_h) + mask).hexdigest()
     manifest_path = directory.parent / 'manifest.json'
     manifest_bytes = manifest_path.read_bytes()
     run_manifest = json.loads(manifest_bytes.decode('utf-8-sig'))
@@ -46,7 +47,7 @@ def validate(directory: Path, mask_path: Path) -> dict:
             or run_manifest['live_pair'].get('performance_evidence') is not False
             or not isinstance(target, dict) or type(target.get('hwnd')) is not int
             or target['hwnd'] <= 0 or not isinstance(run_mask, dict)
-            or run_mask.get('sha256') != digest(mask_path)):
+            or run_mask.get('sha256') != mask_sha256):
         raise ValueError('Run manifest target, mode, or mask does not match live-pair validation')
     manifests = sorted(directory.glob('pair-*.json'))
     if len(manifests) != 3:
@@ -55,28 +56,38 @@ def validate(directory: Path, mask_path: Path) -> dict:
         raise ValueError('Mask must contain exact, outside, and feather pixels')
     rows = []
     identities = set()
+    used_files = set()
+    hwnds = set()
     for manifest_path in manifests:
         meta = json.loads(manifest_path.read_text(encoding='utf-8'))
-        if meta.get('schema') != 1:
+        if type(meta.get('schema')) is not int or meta['schema'] != 1:
             raise ValueError(f'{manifest_path.name}: unsupported schema')
         required = {
             'capture_kind': 'wgc', 'source_fresh': True, 'nvofa_used': True,
             'hud_guard': True, 'same_command_list': True,
         }
         for key, expected in required.items():
-            if meta.get(key) != expected:
+            if type(meta.get(key)) is not type(expected) or meta[key] != expected:
                 raise ValueError(f'{manifest_path.name}: {key} is not {expected!r}')
-        width, height = int(meta['width']), int(meta['height'])
+        for key in ('width', 'height', 'hwnd', 'frame_index', 'capture_serial',
+                    'source_qpc', 'copy_submission_fence'):
+            if type(meta.get(key)) is not int or meta[key] <= 0:
+                raise ValueError(f'{manifest_path.name}: invalid {key}')
+        hwnds.add(meta['hwnd'])
+        width, height = meta['width'], meta['height']
         if (width, height) != (mask_w, mask_h):
             raise ValueError(f'{manifest_path.name}: geometry does not match mask')
-        identity = (int(meta['frame_index']), int(meta['capture_serial']), int(meta['source_qpc']))
+        identity = (meta['frame_index'], meta['capture_serial'], meta['source_qpc'])
         if min(identity) <= 0 or identity in identities:
             raise ValueError(f'{manifest_path.name}: invalid or duplicate capture identity')
         identities.add(identity)
         paths = {key: local_artifact(directory, meta[key]) for key in ('source', 'pre_hud', 'post_hud')}
-        source = load_rgba(paths['source'], width, height)
-        pre = load_rgba(paths['pre_hud'], width, height)
-        post = load_rgba(paths['post_hud'], width, height)
+        resolved = {path.resolve() for path in paths.values()}
+        if len(resolved) != 3 or used_files.intersection(resolved):
+            raise ValueError('Capture files must be unique across all three frames')
+        used_files.update(resolved)
+        blobs = {key: load_rgba(path, width, height) for key, path in paths.items()}
+        source, pre, post = (blobs[key] for key in ('source', 'pre_hud', 'post_hud'))
         exact_max = outside_max = feather_max = changed_exact_pre = 0
         for pixel, weight in enumerate(mask):
             base = pixel * 4
@@ -95,7 +106,8 @@ def validate(directory: Path, mask_path: Path) -> dict:
             'copy_submission_fence': int(meta['copy_submission_fence']),
             'exact_max_error': exact_max, 'outside_max_error': outside_max,
             'feather_max_error': feather_max, 'pre_hud_diff_components_in_exact_mask': changed_exact_pre,
-            'files': {key: {'name': path.name, 'sha256': digest(path)} for key, path in paths.items()},
+            'files': {key: {'name': path.name, 'sha256': hashlib.sha256(blobs[key]).hexdigest()}
+                      for key, path in paths.items()},
             'passed': exact_max == 0 and outside_max == 0 and feather_max <= 1,
         })
     rows.sort(key=lambda row: row['frame_index'])
@@ -103,14 +115,13 @@ def validate(directory: Path, mask_path: Path) -> dict:
         values = [row[key] for row in rows]
         if any(b <= a for a, b in zip(values, values[1:])):
             raise ValueError(f'{key} values are not strictly increasing: {values}')
-    hwnds = {int(json.loads(path.read_text(encoding='utf-8'))['hwnd']) for path in manifests}
     if hwnds != {target['hwnd']}:
         raise ValueError(f'Expected one nonzero WGC HWND, got {sorted(hwnds)}')
     result = {
         'passed': all(row['passed'] for row in rows),
         'scope': 'Three live WGC frames copied source/pre-HUD/post-HUD in each frame same GPU command list with NVOFA enabled.',
         'run_manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),
-        'mask': {'name': mask_path.name, 'sha256': digest(mask_path), 'width': mask_w, 'height': mask_h},
+        'mask': {'name': mask_path.name, 'sha256': mask_sha256, 'width': mask_w, 'height': mask_h},
         'rows': rows,
     }
     return result

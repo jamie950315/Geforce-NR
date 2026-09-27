@@ -35,6 +35,15 @@ fails, and records only GFN-related window metadata. It captures a fresh image
 only while a GFN window covers the foreground screen, cropping out an exposed
 taskbar below the window. The JSON result reports `screenshot_captured`, since
 an older ignored `desktop.png` may remain.
+Probe clicks must hit the unobstructed GFN window. Desktop samples and mask
+previews are discarded if the target or foreground changes during capture.
+The wrappers share `task_control.ps1`: a per-task mutex serializes action changes,
+the dispatched Task Scheduler instance is tracked through queueing, and probe
+results must carry the current request ID. A previous successful JSON file cannot
+stand in for a new probe result. Installation validates task ownership before
+changing any shortcut or task.
+The UI probe reports `screenshot_captured=false` after closing the panel or
+losing its foreground; it never captures the vacated panel rectangle.
 
 Windows deployment: `C:\Users\jamie\dev\gfn-codex-live-20260921`.
 These helpers use a minimally repaired HUD Guard and the existing Lab controller.
@@ -159,6 +168,8 @@ them. GFN itself records increasing lost-frame/packet counters and 245–250 ms 
 A temporary 25 Mbps cap does not remove gaps and is restored to 100 Mbps.
 These observations do not identify the particular ISP, router, or server fault.
 No 600-second qualification or stable-120 production promotion is claimed.
+Timing validation rejects negative or non-finite ages labeled as valid, including
+isolated bad samples that would otherwise disappear from latency percentiles.
 
 Twelve actual-game screenshots pass paired file-fed composition validation:
 protected maximum error 0, unchanged pixels outside the mask, feather-reference
@@ -345,10 +356,12 @@ both ended normally with confirmed NR and hardware optical flow. WGC was
 2560x1440, NR and flow were 1280x720, and output was 2560x1440; host exchange
 rates were 58.77 and 58.58/s. The GFN preflight for this session measured more
 than 100 Mbps, 9.7% packet loss, and 93 ms latency. A bounded three-second,
-79-frame desktop-composition recording during camera motion shows visible
+79-frame desktop-composition recording during view/object movement shows visible
 blockiness in inspected frames. It is lossy and not paired to source frames,
 so the blockiness cannot be assigned to NR, the stream, or the recorder. Keep
 the recording in ignored local run output; these runs do not qualify 120 FPS.
+The right-button interaction picked up the case, as indicated by the game's
+placement prompt; it must not be described as a camera-only motion test.
 This limited sample is not a multi-game or long-sequence guarantee. NR-only is
 the mask-free default; no adaptive HUD mode is deployed. Manual custom masks
 are optional. A source session that ended due to
