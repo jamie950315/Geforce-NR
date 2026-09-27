@@ -49,7 +49,7 @@ readback runs are visual diagnostics only and are rejected by the timing evaluat
 `native-repaired` remains the default; never promote `native-live-pair` for speed.
 
 The user-selected mainline defaults are NR720 + flow1280/G2/Fast in the isolated
-launcher. Resolution tuning still exposes NR 720/900/1080 and explicit flow
+launcher. Resolution tuning exposes NR 720/900/1080/1440 and explicit flow
 width/grid/preset overrides. Five 60-second live samples support this 120-oriented
 configuration; NR900/1080 local processing p95 is 8.88/10.48 ms. G2 Medium at NR720
 is 7.83 ms versus Fast 7.07 ms. All output 2560x1440 via residual composition.
@@ -57,6 +57,12 @@ The flow-width1280 limit is a software allow-list, not a measured hardware cap.
 The panel displays Optical flow height (16:9): 180/360/540/720, retaining stored
 width values 320/640/960/1280 and the existing CLI/processing contract. Actual
 geometry remains authoritative for non-16:9 sources; no preference migration.
+`processing_support.py` extends the isolated launcher's NR1440 settings and size
+calculation without editing Core/Lab. The engine is loaded into a private module
+with the extended settings/size globals; the original engine module stays unchanged.
+All other settings validation and the 7680 MiB NR1440 admission budget remain.
+At 2560x1440 source, NR1440 processes the full frame. Its 45-second HDR replay
+measured 71.90 fresh FPS, not 120. Smaller windows are not upscaled to this budget.
 Do not present offline warp error as live perceptual quality or promote a new
 default without the corresponding configuration decision.
 

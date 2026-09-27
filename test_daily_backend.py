@@ -151,9 +151,15 @@ class DailyTests(unittest.TestCase):
             self.assertEqual(list(Path(folder).glob('*.tmp')), [])
 
     def test_preferences_reject_unknown_and_invalid(self):
-        for change in ({'nr_height': 1440}, {'flow_grid': True}, {'flow_preset': 'unknown'}, {'command': 'anything'}):
+        for change in ({'nr_height': 2160}, {'flow_grid': True}, {'flow_preset': 'unknown'}, {'command': 'anything'}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validated(dict(DEFAULTS, **change))
+
+    def test_nr1440_preference_roundtrip_preserves_default(self):
+        self.assertEqual(DEFAULTS['nr_height'],720)
+        settings=dict(DEFAULTS,nr_height=1440)
+        self.assertEqual(validated(settings),settings)
+        self.assertEqual(migrate_settings(settings),settings)
 
     def controller(self, folder, pid=42):
         c = DailyController.__new__(DailyController)

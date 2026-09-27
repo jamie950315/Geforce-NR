@@ -316,6 +316,14 @@ option. For the measured higher-resolution configuration, select NR input height
 The panel's flow heights 180/360/540/720 are 16:9 equivalents of the stored
 widths 320/640/960/1280. Preferences and CLI remain width-based; other source
 aspect ratios may produce different actual heights, shown in the run geometry.
+NR input height also offers **1440** (CLI: `--height 1440`). A 2560x1440 source
+then uses true 2560x1440 neural processing, not NR900 enlarged to the same output.
+On the validation RTX 4070 SUPER, a 45-second HDR replay measured **71.90 fresh
+FPS**, minimum 70/full second, with flow1280/G2/Fast and the repaired queued worker.
+This is a higher-resolution processing budget, not a 120-FPS preset or guaranteed
+visual improvement. Smaller sources are not enlarged. The isolated launcher
+preserves the existing VRAM admission formula (7680 MiB free for NR1440) and
+does not modify Core/Lab settings or their original engine module.
 The option launches both queue optimizations together and checks the exact
 combined build before saving Start preferences. A missing/altered build blocks
 Start with an error; it never silently selects the old worker. Status includes
@@ -461,7 +469,7 @@ defaults. Opacity/sampler experiments are opt-in and not adopted as fixes.
 
 ## NVOFA and NR resolution controls
 
-The isolated launcher exposes `--height 720|900|1080`,
+The isolated launcher exposes `--height 720|900|1080|1440`,
 `--flow-width 320|640|960|1280`, `--flow-grid 2|4`, and
 `--flow-preset fast|medium|slow`. The selected mainline defaults are NR height 720,
 flow width 1280, grid 2, Fast. These are deployment allow-lists, not statements
@@ -473,7 +481,8 @@ The lattice is bilinearly reconstructed to the NR work size with vector
 magnitudes scaled by work/flow dimensions. Increasing NR resolution alone does
 not increase the number of independently estimated optical-flow vectors.
 
-NR height 720/900/1080 gives 1280x720, 1600x900, or 1920x1080 color processing.
+NR height 720/900/1080/1440 gives 1280x720, 1600x900, 1920x1080, or
+2560x1440 color processing for this source.
 All three output 2560x1440: the original full-resolution source is retained and
 the upsampled NR residual is added before HUD protection. This is not a simple
 upscale of a low-resolution NR image. The original GFN stream resolution is

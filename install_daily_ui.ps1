@@ -8,6 +8,7 @@ $requirements = [ordered]@{
     'Daily UI' = $script
     'Daily backend' = (Join-Path $root 'daily_backend.py')
     'Daily launcher' = (Join-Path $root 'live_run.py')
+    'Processing size support' = (Join-Path $root 'processing_support.py')
     'Application window selection' = (Join-Path $root 'application_windows.py')
     'HDR preflight' = (Join-Path $root 'hdr_support.py')
     'Mask editor' = (Join-Path $root 'mask_editor.py')

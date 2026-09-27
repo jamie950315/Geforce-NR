@@ -9,9 +9,10 @@ import sys
 import time
 import uuid
 from application_windows import enumerate_application_windows
+from processing_support import NR_HEIGHTS
 
 DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False)
-CHOICES = dict(nr_height=(720, 900, 1080), flow_width=(320, 640, 960, 1280),
+CHOICES = dict(nr_height=NR_HEIGHTS, flow_width=(320, 640, 960, 1280),
                flow_grid=(2, 4), flow_preset=('fast', 'medium', 'slow'), mode=('guard', 'nr', 'bypass'),
                mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'), hdr_queued=(False, True))
 

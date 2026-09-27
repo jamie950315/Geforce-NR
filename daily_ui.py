@@ -15,6 +15,7 @@ import traceback
 from ctypes import wintypes
 from pathlib import Path, PureWindowsPath
 from typing import Any
+from processing_support import NR_HEIGHTS
 
 
 APP_TITLE = "Geforce NR"
@@ -381,7 +382,7 @@ class DailyApp:
         advanced.columnconfigure(0, weight=1)
         self.ttk.Label(advanced, text="Advanced processing", style="Section.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 9))
         self.ttk.Label(advanced, text="NR input height", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
-        self.nr_height_frame = self._radio_row(advanced, 2, self.nr_height_var, (720, 900, 1080))
+        self.nr_height_frame = self._radio_row(advanced, 2, self.nr_height_var, NR_HEIGHTS)
         self.ttk.Label(advanced, text="Optical flow height (16:9)", style="Muted.TLabel").grid(row=3, column=0, sticky="w", pady=(8, 0))
         self.flow_width_frame = self._radio_row(advanced, 4, self.flow_width_var,
             tuple(FLOW_HEIGHT_LABELS), labels=FLOW_HEIGHT_LABELS)
@@ -402,7 +403,7 @@ class DailyApp:
             text="Queued HDR + capture (experimental)", variable=self.hdr_queued_var)
         self.hdr_queued_check.grid(row=10, column=0, sticky="w", pady=(10, 0))
         self.ttk.Label(advanced, style="Muted.TLabel", wraplength=340, justify="left",
-            text="Requires HDR + Color-preserving. NR900 / flow height 720 / G2 / Fast tested near 120 FPS; not guaranteed.").grid(
+            text="Requires HDR + Color-preserving. NR900 / flow height 720 / G2 / Fast tested near 120 FPS. NR1440 measured ~72 FPS, not 120.").grid(
                 row=11, column=0, sticky="ew", pady=(3, 0))
 
         preference_actions = self.ttk.Frame(advanced, style="Panel.TFrame")

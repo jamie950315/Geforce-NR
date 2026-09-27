@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from daily_ui import DailyApp, FLOW_HEIGHT_LABELS, RECOMMENDED_SETTINGS, fit_window_bounds
+from daily_ui import DailyApp, FLOW_HEIGHT_LABELS, NR_HEIGHTS, RECOMMENDED_SETTINGS, fit_window_bounds
 
 
 class Variable:
@@ -46,6 +46,9 @@ class CloseRecoveryTests(unittest.TestCase):
         app._apply_settings_to_form(dict(RECOMMENDED_SETTINGS, hdr=True, hdr_queued=True, nr_height=900))
         self.assertTrue(app._settings_from_form()['hdr_queued'])
         self.assertEqual(app._settings_from_form()['nr_height'],900)
+        self.assertEqual(NR_HEIGHTS,(720,900,1080,1440))
+        app._apply_settings_to_form(dict(RECOMMENDED_SETTINGS,nr_height=1440))
+        self.assertEqual(app._settings_from_form()['nr_height'],1440)
         for width in FLOW_HEIGHT_LABELS:
             saved=dict(RECOMMENDED_SETTINGS, flow_width=width)
             app._apply_settings_to_form(saved)

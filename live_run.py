@@ -13,9 +13,12 @@ ROOT = Path(__file__).resolve().parent
 LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
 sys.path.insert(0, str(LIVE))
 from live_hud import verify, LAB, STABLE, NATIVE, load, digest
-from gfn_core.config import Appearance, Settings, atomic_json
-from gfn_core.engine import Engine
+from gfn_core.config import Appearance, Settings as CoreSettings, atomic_json
+from processing_support import NR_HEIGHTS, settings_type, load_engine
 from gfn_core.windows import Win32
+
+Settings = settings_type(CoreSettings)
+Engine = load_engine(Settings)
 
 
 class RecordedEngine(Engine):
@@ -101,7 +104,7 @@ def main():
     ap.add_argument('--hwnd', type=int, required=True)
     ap.add_argument('--mode', choices=['bypass', 'nr', 'guard'], required=True)
     ap.add_argument('--seconds', type=int, default=60)
-    ap.add_argument('--height', type=int, choices=[720, 900, 1080], default=720)
+    ap.add_argument('--height', type=int, choices=NR_HEIGHTS, default=720)
     ap.add_argument('--flow-width', type=int, choices=[320, 640, 960, 1280], default=1280)
     ap.add_argument('--flow-grid', type=int, choices=[2, 4], default=2)
     ap.add_argument('--flow-preset', choices=['fast', 'medium', 'slow'], default='fast')
@@ -236,7 +239,8 @@ def main():
                 hdr_motion_repaired=a.capture_queued_hdr,
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
-                dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py', LAB / 'gfn_core/wire.py')}))
+                dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py',
+                    LAB / 'gfn_core/config.py', LAB / 'gfn_core/wire.py', ROOT / 'processing_support.py')}))
     if a.hdr_proof:
         os.environ['GFN_HDR_MANIFEST_SHA256'] = digest(run/'manifest.json')
     try:
