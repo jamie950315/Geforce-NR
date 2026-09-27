@@ -310,8 +310,9 @@ and game-image artifacts remain local and excluded from this repository.
 ### Opt-in higher-resolution HDR experiments
 
 The daily panel exposes **Queued HDR + capture (experimental)** under Advanced
-processing. Enable HDR output, select **Color-preserving**, then enable this
-option. For the measured higher-resolution configuration, select NR input height
+processing. Turning on **HDR output** automatically selects **Color-preserving**
+and enables the combined queued option. Advanced manual overrides remain available;
+saved choices are preserved when reopening the panel. For the measured higher-resolution configuration, select NR input height
 **900**, flow height **720**, grid **G2**, and preset **Fast**, then Start.
 The panel's flow heights 180/360/540/720 are 16:9 equivalents of the stored
 widths 320/640/960/1280. Preferences and CLI remain width-based; other source

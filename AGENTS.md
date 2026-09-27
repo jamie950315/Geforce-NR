@@ -114,6 +114,9 @@ Swizzle and gray own different descriptor heaps, gray's later fence retires both
 and the D3D11 source-copy wait remains mandatory. Neither changes daily defaults.
 The panel's `hdr_queued` boolean selects both optimizations together. It defaults
 off and requires HDR plus Color-preserving; switching to SDR/Legacy clears it.
+Turning on the panel's HDR checkbox automatically selects Color-preserving and
+enables the combined queued path. Advanced manual overrides remain available;
+loading saved preferences does not silently replace explicit saved choices.
 Existing preferences migrate with queue off and a local backup. Start preflight
 attests the combined build before saving preferences; no old-worker fallback.
 The repaired motion path preserves decoded subpixel vectors instead of applying

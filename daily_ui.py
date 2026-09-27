@@ -359,7 +359,7 @@ class DailyApp:
             variable=self.mask_enabled_var, command=self._refresh_mask_status)
         self.mask_check.grid(row=2, column=0, sticky='w', pady=(10, 6))
         self.hdr_check = self.ttk.Checkbutton(controls, text='HDR output (Windows HDR required)',
-            variable=self.hdr_var, command=self._hdr_options_changed)
+            variable=self.hdr_var, command=self._hdr_toggled)
         self.hdr_check.grid(row=2, column=1, columnspan=2, sticky='w', pady=(10, 6))
         self.mask_combo = self.ttk.Combobox(controls, textvariable=self.mask_profile_var,
             values=tuple(MASK_LABELS), state='readonly')
@@ -518,6 +518,14 @@ class DailyApp:
 
     def _hdr_options_changed(self, _event=None) -> None:
         if not self.hdr_var.get() or HDR_MAPPING_LABELS.get(self.hdr_mapping_var.get()) != 'color-preserving':
+            self.hdr_queued_var.set(False)
+        self._refresh_mask_status()
+
+    def _hdr_toggled(self) -> None:
+        if self.hdr_var.get():
+            self.hdr_mapping_var.set('Color-preserving')
+            self.hdr_queued_var.set(True)
+        else:
             self.hdr_queued_var.set(False)
         self._refresh_mask_status()
 

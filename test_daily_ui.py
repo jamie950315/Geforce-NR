@@ -68,6 +68,23 @@ class CloseRecoveryTests(unittest.TestCase):
             self.assertIs(app.hdr_queued_var.get(),expected)
         self.assertEqual(len(calls),3)
 
+    def test_enabling_hdr_selects_color_preserving_and_queued(self):
+        app = DailyApp.__new__(DailyApp)
+        app.hdr_var, app.hdr_mapping_var, app.hdr_queued_var = Variable(), Variable(), Variable()
+        calls=[]
+        app._refresh_mask_status=lambda: calls.append(True)
+        app.hdr_mapping_var.set('Legacy')
+        app.hdr_queued_var.set(False)
+        app.hdr_var.set(True)
+        app._hdr_toggled()
+        self.assertEqual(app.hdr_mapping_var.get(),'Color-preserving')
+        self.assertIs(app.hdr_queued_var.get(),True)
+        app.hdr_var.set(False)
+        app._hdr_toggled()
+        self.assertIs(app.hdr_queued_var.get(),False)
+        self.assertEqual(app.hdr_mapping_var.get(),'Color-preserving')
+        self.assertEqual(len(calls),2)
+
     def test_loading_existing_preferences_preserves_legacy_mapping(self):
         app = DailyApp.__new__(DailyApp)
         loaded = []
