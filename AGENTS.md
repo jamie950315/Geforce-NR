@@ -73,6 +73,18 @@ and NR-owned windows. The daily child uses the same enumerator; diagnostic CLI
 selection and GFN-specific capture tools still use their original restrictions.
 Do not relax those diagnostic capture guards when extending daily selection.
 Window eligibility does not guarantee WGC/DRM compatibility.
+HDR output is opt-in (`hdr` preference / `--hdr`) and uses a separately staged
+`native-hdr`; `native-repaired` remains the SDR default. `stage_hdr.py` patches
+only a copied, attested repaired source tree. Do not edit Core/Lab or overwrite
+existing builds. `hdr_support.py` checks worker/runtime hashes and the selected
+monitor's Windows HDR state before launch. The worker reads `GFN_NR_HDR`, not
+Core's forced-off `NS_HDR`; it requires FP16 WGC and scRGB presentation and fails
+closed when Windows HDR is lost. NR/flow operate on SDR proxies; bounded linear
+residual composition preserves the original HDR anchor, including exact bypass
+and full-mask cores. The mask preview and ordinary PPM exports remain SDR.
+Only `color.json` after successful HDR presentation confirms the active path.
+`--hdr-proof` is a one-time same-frame FP16/proxy readback for
+`validate_hdr_proof.py`, never timing or physical-display luminance evidence.
 One observed Cyberpunk exit kept the GFN HWND/title but changed geometry from
 2560x1440 to 2578x1398 and showed Steam, so HWND identity alone does not mark
 the end of a game session. A size change in daily mode now fails closed.

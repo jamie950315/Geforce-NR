@@ -10,10 +10,10 @@ import time
 import uuid
 from application_windows import enumerate_application_windows
 
-DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom')
+DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False)
 CHOICES = dict(nr_height=(720, 900, 1080), flow_width=(320, 640, 960, 1280),
                flow_grid=(2, 4), flow_preset=('fast', 'medium', 'slow'), mode=('guard', 'nr', 'bypass'),
-               mask_profile=('custom', 'cyberpunk'))
+               mask_profile=('custom', 'cyberpunk'), hdr=(False, True))
 
 
 def validated(value):
@@ -39,6 +39,8 @@ def read_json(path):
 
 
 def migrate_settings(value):
+    if isinstance(value, dict) and 'hdr' not in value:
+        value = dict(value, hdr=False)
     if isinstance(value, dict) and set(value) == set(DEFAULTS)-{'mask_profile'}:
         value = validated(dict(value, mask_profile='cyberpunk' if value['mode'] == 'guard' else 'custom'))
         if value['mode'] == 'guard':
@@ -55,7 +57,8 @@ class DailyController:
             previous = read_json(self.preference_file)
             self.settings = migrate_settings(previous)
             if self.settings != previous:
-                backup = self.root/'daily-settings-before-optional-mask.json'
+                backup = self.root/('daily-settings-before-hdr.json' if 'mask_profile' in previous
+                                    else 'daily-settings-before-optional-mask.json')
                 if not backup.exists():
                     atomic_json(backup, previous)
                 atomic_json(self.preference_file, self.settings)
@@ -177,6 +180,9 @@ class DailyController:
             raise RuntimeError('This panel already owns a running session')
         value = validated(settings)
         current = self._current_target(target)
+        if value['hdr']:
+            from hdr_support import require_hdr_display
+            require_hdr_display(self.root, current['hwnd'])
         if value['mode'] == 'guard':
             from mask_profiles import build_mask, validate_mask
             if value['mask_profile'] == 'cyberpunk':
@@ -211,6 +217,8 @@ class DailyController:
                 '--flow-grid', str(value['flow_grid']), '--flow-preset', value['flow_preset']]
         if value['mode'] == 'guard':
             args += ['--mask', str(mask)]
+        if value['hdr']:
+            args += ['--hdr']
         # This log is created outside the run, which the launcher creates exclusively.
         self.launch_log = self.root/'runs'/(name + '-launch.log')
         self.launch_log.parent.mkdir(exist_ok=True)
@@ -292,7 +300,15 @@ class DailyController:
         geometry = 'NR: ' + shape(self.metrics.get('processing_size')) + '   Flow: ' + shape(self.metrics.get('flow_input_size')) + '   Output: ' + shape(self.metrics.get('output_size'))
         processing = self.busy and not self.metrics.get('suspended') and not self.metrics.get('settings', {}).get('bypass')
         evidence = self.run if self.run and self.run.exists() else (self.launch_log.parent if self.launch_log and self.launch_log.exists() else None)
-        return dict(state=self.state, detail=self.detail, end_reason=end_reason,
+        hdr_status = 'SDR'
+        if self.run and (self.run/'manifest.json').exists():
+            manifest = read_json(self.run/'manifest.json')
+            if manifest.get('hdr'):
+                color = read_json(self.run/'color.json') if (self.run/'color.json').exists() else {}
+                hdr_status = ('HDR scRGB active' if self.busy and self.state == 'running' and color.get('active') is True
+                              else 'HDR paused' if self.busy and self.state == 'suspended'
+                              else 'HDR initializing' if self.busy else 'HDR stopped')
+        return dict(state=self.state, detail=self.detail, end_reason=end_reason, hdr_status=hdr_status,
                     run=str(evidence) if evidence else None,
                     geometry=geometry, nr_confirmed=bool(processing and self.metrics.get('nr_confirmed')),
                     hardware_flow_active=bool(processing and self.metrics.get('hardware_flow_active')))

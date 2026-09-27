@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from daily_ui import DailyApp, fit_window_bounds
+from daily_ui import DailyApp, RECOMMENDED_SETTINGS, fit_window_bounds
 
 
 class Variable:
@@ -17,6 +17,52 @@ class Variable:
 
 
 class CloseRecoveryTests(unittest.TestCase):
+    def test_hdr_preference_round_trip_and_legacy_default(self):
+        app = DailyApp.__new__(DailyApp)
+        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'nr_height',
+                     'flow_width', 'flow_grid', 'flow_preset'):
+            setattr(app, name + '_var', Variable())
+        for saved, expected in (({}, False), ({'hdr': True}, True),
+                                ({'hdr': False}, False), (RECOMMENDED_SETTINGS, False)):
+            with self.subTest(saved=saved):
+                app._apply_settings_to_form(saved)
+                self.assertIs(app._settings_from_form()['hdr'], expected)
+
+    def test_poll_displays_reported_hdr_status_and_legacy_sdr(self):
+        app = DailyApp.__new__(DailyApp)
+        app._last_state = 'running'
+        app._closing = False
+        app.root = SimpleNamespace(after=lambda *args: None)
+        snapshots = []
+        app._set_status = lambda **kwargs: snapshots.append(kwargs)
+        for extra, expected in (({}, 'SDR'), ({'hdr_status': 'HDR FP16'}, 'HDR FP16')):
+            app.controller = SimpleNamespace(poll=lambda: dict(
+                state='running', detail='Active', geometry='1280x720 → 2560x1440', **extra))
+            app._poll_controller()
+            self.assertEqual(snapshots[-1]['geometry'], f'1280x720 → 2560x1440 · {expected}')
+
+    def test_hdr_control_disabled_while_busy_or_closing(self):
+        app = DailyApp.__new__(DailyApp)
+        states = {}
+        for name in ('target_combo', 'mode_combo', 'refresh_button', 'save_button',
+                     'restore_button', 'hdr_check', 'mask_check', 'mask_combo',
+                     'edit_mask_button', 'start_button', 'stop_button', 'open_run_button'):
+            setattr(app, name, SimpleNamespace(configure=lambda name=name, **kwargs: states.update({name: kwargs['state']})))
+        for name in ('nr_height_frame', 'flow_width_frame', 'flow_grid_frame', 'flow_preset_frame'):
+            setattr(app, name, SimpleNamespace(winfo_children=lambda: []))
+        app.mode_var = Variable()
+        app.target_var = Variable()
+        app.target_by_display = {}
+        app._mask_ready = True
+        app._run_path = None
+        app._last_state = 'idle'
+        for busy, closing, expected in ((False, False, 'normal'), (True, False, 'disabled'),
+                                        (False, True, 'disabled')):
+            app._controller_busy = lambda: busy
+            app._closing = closing
+            app._sync_controls()
+            self.assertEqual(states['hdr_check'], expected)
+
     def test_new_list_requires_explicit_selection_and_shows_executable(self):
         app = DailyApp.__new__(DailyApp)
         app.target_var = Variable()

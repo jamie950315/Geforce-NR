@@ -2,6 +2,7 @@ evidence/
 __pycache__/
 daily-settings.json
 daily-settings-before-optional-mask.json
+daily-settings-before-hdr.json
 masks/
 daily-ui-error.log
 daily-probe.json
@@ -41,6 +42,7 @@ daily-probe.png
 *.pcap
 *.pcapng
 *.rgba
+*.fp16
 *.png
 *.jpg
 *.jpeg

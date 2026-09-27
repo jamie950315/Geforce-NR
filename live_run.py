@@ -114,6 +114,8 @@ def main():
     ap.add_argument('--original-worker', action='store_true')
     ap.add_argument('--live-pair-worker', action='store_true')
     ap.add_argument('--daily', action='store_true')
+    ap.add_argument('--hdr', action='store_true', help='Require Windows HDR and preserve FP16 scRGB output')
+    ap.add_argument('--hdr-proof', action='store_true', help='One local FP16 readback; not timing evidence')
     ap.add_argument('--owner-pid', type=int)
     ap.add_argument('--owner-created', type=int)
     ap.add_argument('--owner-token')
@@ -123,6 +125,10 @@ def main():
     ap.add_argument('--target-width', type=int)
     ap.add_argument('--target-height', type=int)
     a = ap.parse_args()
+    if a.hdr_proof and not a.hdr:
+        raise ValueError('HDR proof requires HDR output')
+    if a.hdr and any((a.probe_worker, a.fixed_worker, a.original_worker, a.live_pair_worker, a.repaired_worker)):
+        raise ValueError('HDR output requires the isolated HDR worker')
     if not a.name.replace('-', '').isalnum() or not (5 <= a.seconds <= 600 or (a.daily and a.seconds == 0)):
         raise ValueError('Invalid run name or duration')
     if a.daily and (not a.owner_pid or not a.owner_created or not a.owner_token or len(a.owner_token) != 32 or any(c not in '0123456789abcdef' for c in a.owner_token) or a.live_pair_worker or a.probe_worker or a.fixed_worker or a.original_worker):
@@ -143,7 +149,7 @@ def main():
     if a.overlay_alpha != 255 and not a.fixed_worker:
         raise ValueError('Opacity experiment requires the repaired diagnostic worker')
     if not a.original_worker:
-        kind = 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
+        kind = 'hdr' if a.hdr else 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
         native = ROOT / ('native-' + kind)
         build = load(ROOT / (kind + '-build.json'))
         if digest(native/'nvngx.dll') != build['worker_sha256'] or digest(native/'nvngx_dlssnr.dll') != integrity['runtime_sha256']:
@@ -162,6 +168,10 @@ def main():
     if len(targets) != 1 or win.u.IsIconic(a.hwnd):
         raise RuntimeError('Explicit window target is unavailable')
     target = targets[0]
+    hdr_display = None
+    if a.hdr:
+        from hdr_support import require_hdr_display
+        hdr_display = require_hdr_display(ROOT, target.hwnd)
     if a.daily:
         actual = target.to_dict()
         if ((actual['pid'], actual['created'], actual['title']) !=
@@ -174,6 +184,18 @@ def main():
         validate_mask(a.mask, *mask_geometry)
     run = ROOT / 'runs' / a.name
     run.mkdir(parents=True, exist_ok=False)
+    # Core's NS_HDR=0 remains untouched. Only the isolated HDR worker reads
+    # this explicit opt-in; inherited diagnostic paths must never leak in.
+    os.environ['GFN_NR_HDR'] = '1' if a.hdr else '0'
+    os.environ.pop('GFN_HDR_STATUS', None)
+    os.environ.pop('GFN_HDR_PROOF_DIR', None)
+    os.environ.pop('GFN_HDR_MANIFEST_SHA256', None)
+    if a.hdr:
+        os.environ['GFN_HDR_STATUS'] = str(run/'color.json')
+    if a.hdr_proof:
+        proof = run/'hdr-proof'
+        proof.mkdir()
+        os.environ['GFN_HDR_PROOF_DIR'] = str(proof)
     os.environ.pop('GFN_LIVE_PAIR_DIR', None)
     os.environ.pop('GFN_LIVE_PAIR_FRAMES', None)
     live_pair = None
@@ -197,10 +219,13 @@ def main():
                         appearance=appearance, pacing='source', capture_wait_ms=16,
                         flow_width=a.flow_width, flow_grid=a.flow_grid, flow_preset=a.flow_preset)
     atomic_json(run / 'manifest.json', dict(target=target.to_dict(), settings=settings.to_dict(),
-                mode=a.mode, mask=mask, daily=a.daily,
+                mode=a.mode, mask=mask, daily=a.daily, hdr=a.hdr, hdr_display=hdr_display,
+                hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof,
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),
                 dependencies={str(p): digest(p) for p in (LIVE / 'live_hud.py', LAB / 'gfn_core/engine.py', LAB / 'gfn_core/wire.py')}))
+    if a.hdr_proof:
+        os.environ['GFN_HDR_MANIFEST_SHA256'] = digest(run/'manifest.json')
     try:
         atomic_json(ROOT / 'active.json', dict(run=str(run), pid=os.getpid(), owner_token=a.owner_token))
         atomic_json(ROOT / 'latest.json', dict(run=str(run)))

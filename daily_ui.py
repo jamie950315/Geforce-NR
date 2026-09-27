@@ -31,6 +31,7 @@ RECOMMENDED_SETTINGS: dict[str, Any] = {
     "flow_preset": "fast",
     "mode": "nr",
     "mask_profile": "custom",
+    "hdr": False,
 }
 
 MODE_LABELS = {
@@ -284,6 +285,7 @@ class DailyApp:
         self.target_var = self.tk.StringVar()
         self.mode_var = self.tk.StringVar()
         self.mask_enabled_var = self.tk.BooleanVar(value=False)
+        self.hdr_var = self.tk.BooleanVar(value=False)
         self.mask_profile_var = self.tk.StringVar()
         self.mask_summary_var = self.tk.StringVar()
         self.nr_height_var = self.tk.IntVar()
@@ -347,7 +349,10 @@ class DailyApp:
 
         self.mask_check = self.ttk.Checkbutton(controls, text='Enable HUD Mask (optional)',
             variable=self.mask_enabled_var, command=self._refresh_mask_status)
-        self.mask_check.grid(row=2, column=0, columnspan=3, sticky='w', pady=(10, 6))
+        self.mask_check.grid(row=2, column=0, sticky='w', pady=(10, 6))
+        self.hdr_check = self.ttk.Checkbutton(controls, text='HDR output (Windows HDR required)',
+            variable=self.hdr_var)
+        self.hdr_check.grid(row=2, column=1, columnspan=2, sticky='w', pady=(10, 6))
         self.mask_combo = self.ttk.Combobox(controls, textvariable=self.mask_profile_var,
             values=tuple(MASK_LABELS), state='readonly')
         self.mask_combo.grid(row=3, column=0, columnspan=2, sticky='ew', padx=(0, 10))
@@ -415,7 +420,7 @@ class DailyApp:
         self.ttk.Label(
             outer,
             text=(
-                "HUD Mask is off by default. Draw fixed screen regions per window and resolution; recapture after layout changes. SDR only. "
+                "HDR uses an SDR neural proxy and FP16 HDR composition. Mask preview is SDR only; redraw after layout changes. "
                 "Stop before changing settings. Ctrl+Alt+Q: stop · Ctrl+Alt+F9: panel · Ctrl+Alt+F8: toggle NR."
             ),
             style="Subtitle.TLabel",
@@ -458,6 +463,7 @@ class DailyApp:
         if mode not in MODE_VALUES_TO_LABELS:
             mode = "nr"
         self.mode_var.set(MODE_VALUES_TO_LABELS[mode])
+        self.hdr_var.set(settings.get("hdr", False))
         self.mask_profile_var.set(next(label for label, value in MASK_LABELS.items()
                                       if value == settings.get('mask_profile', 'custom')))
         self.nr_height_var.set(settings.get("nr_height", 720))
@@ -474,6 +480,7 @@ class DailyApp:
             "mode": ('bypass' if MODE_LABELS.get(self.mode_var.get()) == 'bypass' else
                      ('guard' if self.mask_enabled_var.get() else 'nr')),
             "mask_profile": MASK_LABELS[self.mask_profile_var.get()],
+            "hdr": bool(self.hdr_var.get()),
         }
 
     def edit_mask(self) -> None:
@@ -555,7 +562,7 @@ class DailyApp:
         self._apply_settings_to_form(RECOMMENDED_SETTINGS)
         try:
             self.controller.save_settings(dict(RECOMMENDED_SETTINGS))
-            self.status_detail_var.set("Recommended NR720, flow 1280, G2 Fast, mask off restored and saved.")
+            self.status_detail_var.set("Recommended NR720, flow 1280, G2 Fast, mask off, SDR restored and saved.")
             self._refresh_mask_status()
         except Exception as exc:
             _write_error_log("Failed to restore recommended settings")
@@ -596,7 +603,7 @@ class DailyApp:
             self._set_status(
                 state=str(snapshot.get("state", "error")),
                 detail=str(snapshot.get("detail") or "No status detail was provided."),
-                geometry=str(snapshot.get("geometry") or "Not reported"),
+                geometry=f"{snapshot.get('geometry') or 'Not reported'} · {snapshot.get('hdr_status', 'SDR')}",
                 nr_confirmed=bool(snapshot.get("nr_confirmed", False)),
                 hardware_flow_active=bool(snapshot.get("hardware_flow_active", False)),
                 run=snapshot.get("run"),
@@ -684,6 +691,7 @@ class DailyApp:
         self.refresh_button.configure(state="disabled" if busy or self._closing else "normal")
         self.save_button.configure(state="disabled" if busy or self._closing else "normal")
         self.restore_button.configure(state="disabled" if busy or self._closing else "normal")
+        self.hdr_check.configure(state="disabled" if busy or self._closing else "normal")
         editable = not busy and not self._closing and MODE_LABELS.get(self.mode_var.get()) != 'bypass'
         self.mask_check.configure(state='normal' if editable else 'disabled')
         self.mask_combo.configure(state='readonly' if editable else 'disabled')

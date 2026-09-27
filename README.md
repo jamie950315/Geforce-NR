@@ -113,7 +113,54 @@ overlays during capture. The preview is captured in memory, not saved as a
 screenshot. Rectangle cores preserve source pixels with a four-pixel outer
 feather; background inside a rectangle is preserved too. This is manual rectangle
 selection, not freehand segmentation, automatic detection, or moving-HUD tracking.
-HDR is not supported. Re-edit if a game's HUD layout changes.
+The mask-editor preview is SDR, even when HDR output is selected; use it for
+coordinates, not HDR brightness/color judgment. Re-edit if a game's HUD layout changes.
+
+### HDR output
+
+Enable **HDR output (Windows HDR required)** before Start to preserve HDR on
+the selected window's display. The display must have Windows HDR enabled;
+the launcher verifies the window's monitor before saving preferences, and the
+worker checks again. Moving to an SDR monitor or disabling Windows HDR stops
+the HDR worker instead of silently switching to SDR. Unsupported color-space
+presentation is an error. Stream codec labels and 10-bit output alone do not
+establish that the Windows display is in HDR mode.
+
+The isolated `native-hdr` worker captures WGC as RGBA16F scRGB, makes an SDR
+proxy for the existing neural runtime and optical flow, and applies a bounded
+linear-light residual back to the original FP16 frame. It presents FP16 scRGB
+with an explicit linear BT.709 color space. This is HDR-preserving composition,
+not a claim that the neural model itself processes native HDR. Bypass preserves
+the original HDR RGB values. A fully protected mask region makes the proxy
+residual zero, preserving the original HDR pixels; feathered regions blend
+the proxy edit before HDR composition.
+
+The panel reports **HDR scRGB active** only after the worker successfully
+presents HDR. Existing preferences migrate to HDR-off without changing mask
+choices. **Restore recommended** also selects SDR. The default SDR worker and
+original Core/Lab files are unchanged.
+
+Stage the optional HDR worker on the existing Windows deployment with
+`python stage_hdr.py`. It requires the attested `native-repaired` source tree,
+runtime, build record, and `Build-Repaired.cmd`; it refuses to overwrite an
+existing `native-hdr`. The build emits `hdr-build.json` with source and binary
+hashes. A missing or altered HDR build blocks HDR Start but does not block SDR.
+The CLI equivalent is `--hdr`. `--hdr-proof` additionally writes one same-frame
+FP16 source/output and SDR-proxy readback under the run directory. Validate it
+with `python validate_hdr_proof.py runs/<name>` (NumPy required). These diagnostic
+readbacks are not timing evidence. Ordinary PPM snapshots remain SDR proxies,
+not HDR output captures, and must not be used to certify HDR brightness.
+
+Windows recommends FP16 capture for HDR to avoid clipping; see
+[Microsoft's screen-capture guidance](https://learn.microsoft.com/en-us/windows/apps/develop/media-authoring-processing/screen-capture).
+
+On the Windows validation host, a synthetic HDR source passed bypass, NR, and
+masked-NR GPU readbacks: source highlights exceeded the configured SDR white,
+bypass RGB was exact, and 196,142 masked HDR pixels were unchanged. A short
+chiaki-ng / PS5 / GTA V HDR run also confirmed FP16 capture/presentation, active
+NR and hardware flow, 2560x1440 output with 1280x720 processing, and a clean stop.
+These checks establish the software color/identity contract, not measured panel
+luminance, broad perceptual quality, ghost-free motion, or stable 120 FPS.
 
 Existing pre-mask-selector preferences migrate once to mask-off while preserving
 processing settings, with a local `daily-settings-before-optional-mask.json`
@@ -194,7 +241,8 @@ outside-mask error is 0, and feather-reference error is at most 1/255. The NR
 pre-HUD pixels differ from the source, so this is not a bypass-only equality test.
 This is a three-frame composition proof, not broad perceptual or motion coverage.
 Moving world-space labels, arbitrary menus, resolution
-changes, and HDR are outside the fixed mask contract.
+changes are outside the fixed mask contract. These historical results are SDR;
+the opt-in HDR path has a separate FP16 composition proof.
 
 ## Run and stop
 
