@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import traceback
 from mask_profiles import validate_mask
+from application_windows import enumerate_application_windows
 
 ROOT = Path(__file__).resolve().parent
 LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
@@ -33,7 +34,31 @@ class RecordedEngine(Engine):
             self.stop.set()
             return True
         previous = self.suspended
-        hidden = super()._visibility()
+        if self.daily_geometry:
+            # Applications can own several independent windows. A different
+            # window in the same process must not keep the selected overlay up.
+            foreground = self.win.u.GetForegroundWindow()
+            foreground_pid = self.win.pid(foreground)
+            hidden = bool(self.win.u.IsIconic(self.target.hwnd)) or (
+                foreground != self.target.hwnd and
+                foreground_pid not in {os.getpid(), self.transport.process.pid})
+            if hidden != self.suspended:
+                self.suspended = hidden
+                if hidden:
+                    self.hidden = [hw for hw in self.win.worker_windows(self.transport.process.pid)
+                                   if self.win.u.IsWindowVisible(hw)]
+                    for hw in self.hidden:
+                        self.win.u.ShowWindow(hw, 0)
+                else:
+                    for hw in self.hidden:
+                        if self.win.pid(hw) == self.transport.process.pid:
+                            self.win.u.ShowWindow(hw, 4)
+                    self.hidden = []
+                    self.reset_next = True
+                    self.pacer.reset()
+                    self.metrics.resume()
+        else:
+            hidden = super()._visibility()
         if previous != hidden:
             self._write_metrics()
         return hidden
@@ -56,7 +81,7 @@ class RecordedEngine(Engine):
 
     def _configure(self):
         if self.mask_geometry and self.win.rect(self.target.hwnd)[2:] != self.mask_geometry:
-            raise RuntimeError('Game size changed while a HUD mask was active; stop and select a matching profile')
+            raise RuntimeError('Window size changed while a HUD mask was active; stop and select a matching profile')
         super()._configure()
         if self.mask_geometry and tuple(self.full) != self.mask_geometry:
             raise RuntimeError('WGC geometry does not match the active HUD mask')
@@ -104,7 +129,7 @@ def main():
         raise ValueError('Daily mode requires an owning UI and the mainline worker')
     if a.daily and (not a.target_pid or not a.target_created or not a.target_title
                     or not a.target_width or not a.target_height):
-        raise ValueError('Daily mode requires the selected game identity and geometry')
+        raise ValueError('Daily mode requires the selected window identity and geometry')
     if (a.mode == 'guard') != bool(a.mask):
         raise ValueError('Only guard mode requires a mask')
     if a.live_pair_worker and (a.mode != 'guard' or a.seconds > 30):
@@ -131,16 +156,18 @@ def main():
             raise RuntimeError('Existing controller preserved: ' + str(root))
     if a.daily and win.identity(a.owner_pid)[1] != a.owner_created:
         raise RuntimeError('Owning UI is unavailable')
-    targets = [t for t in win.enumerate() if t.hwnd == a.hwnd and t.title.strip().lower() != 'geforce now']
+    available = (enumerate_application_windows(win, excluded_pids=(a.owner_pid,))
+                 if a.daily else [t for t in win.enumerate() if t.title.strip().lower() != 'geforce now'])
+    targets = [t for t in available if t.hwnd == a.hwnd]
     if len(targets) != 1 or win.u.IsIconic(a.hwnd):
-        raise RuntimeError('Explicit game target is unavailable')
+        raise RuntimeError('Explicit window target is unavailable')
     target = targets[0]
     if a.daily:
         actual = target.to_dict()
         if ((actual['pid'], actual['created'], actual['title']) !=
                 (a.target_pid, a.target_created, a.target_title)
                 or win.rect(target.hwnd)[2:] != (a.target_width, a.target_height)):
-            raise RuntimeError('Selected game identity or size changed before launch; refresh the panel')
+            raise RuntimeError('Selected window identity or size changed before launch; refresh the panel')
     mask_geometry = None
     if a.mask:
         mask_geometry = tuple(win.rect(target.hwnd)[2:])

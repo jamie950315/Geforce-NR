@@ -12,6 +12,32 @@ from unittest.mock import Mock, patch
 
 @unittest.skipUnless(sys.platform == 'win32', 'Requires the deployed Windows Core/Lab runtime')
 class DailyGeometryTests(unittest.TestCase):
+    def test_daily_other_window_in_same_process_suspends_and_resumes(self):
+        from live_run import RecordedEngine
+
+        engine = RecordedEngine.__new__(RecordedEngine)
+        engine.owner = None
+        engine.daily_geometry = (960, 640)
+        engine.target = SimpleNamespace(hwnd=1, pid=700)
+        foreground = [2]
+        show = Mock()
+        engine.win = SimpleNamespace(rect=lambda _: (0, 0, 960, 640),
+            pid=lambda hwnd: 800 if hwnd == 3 else 700, worker_windows=lambda _: [3],
+            u=SimpleNamespace(IsIconic=lambda _: False, GetForegroundWindow=lambda: foreground[0],
+                              IsWindowVisible=lambda _: True, ShowWindow=show))
+        engine.transport = SimpleNamespace(process=SimpleNamespace(pid=800))
+        engine.suspended = False
+        engine._write_metrics = Mock()
+        engine.pacer = SimpleNamespace(reset=Mock())
+        engine.metrics = SimpleNamespace(resume=Mock())
+        self.assertTrue(engine._visibility())
+        show.assert_called_once_with(3, 0)
+        foreground[0] = 1
+        self.assertFalse(engine._visibility())
+        show.assert_called_with(3, 4)
+        engine.pacer.reset.assert_called_once()
+        engine.metrics.resume.assert_called_once()
+
     def test_failed_latest_record_removes_active_pointer(self):
         import live_run
 

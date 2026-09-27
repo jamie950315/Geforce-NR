@@ -13,7 +13,7 @@ import sys
 import time
 import traceback
 from ctypes import wintypes
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
@@ -38,7 +38,7 @@ MODE_LABELS = {
     "Bypass — capture only": "bypass",
 }
 MODE_VALUES_TO_LABELS = {value: label for label, value in MODE_LABELS.items()}
-MASK_LABELS = {'Custom regions (selected game)': 'custom', 'Cyberpunk 2077 preset (1440p)': 'cyberpunk'}
+MASK_LABELS = {'Custom regions (selected window)': 'custom', 'Cyberpunk 2077 preset (1440p)': 'cyberpunk'}
 
 
 def fit_window_bounds(requested, work_area, decoration=(0, 0)):
@@ -183,7 +183,7 @@ class DailyApp:
         self.refresh_targets()
         self._set_status(
             state="idle",
-            detail="Choose the GeForce NOW game window, then start the guard.",
+            detail="Choose an application window, then start Neural Rendering.",
             geometry="Not running",
             nr_confirmed=False,
             hardware_flow_active=False,
@@ -317,7 +317,7 @@ class DailyApp:
         target_panel = self.ttk.Frame(outer, style="Panel.TFrame", padding=12)
         target_panel.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         target_panel.columnconfigure(0, weight=1)
-        self.ttk.Label(target_panel, text="Game window", style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        self.ttk.Label(target_panel, text="Application window", style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         self.target_combo = self.ttk.Combobox(target_panel, textvariable=self.target_var, state="readonly")
         self.target_combo.grid(row=1, column=0, sticky="ew", padx=(0, 10))
         self.target_combo.bind("<<ComboboxSelected>>", lambda _event: self._refresh_mask_status())
@@ -415,7 +415,7 @@ class DailyApp:
         self.ttk.Label(
             outer,
             text=(
-                "HUD Mask is off by default. Draw fixed screen regions per game and resolution; recapture after layout changes. SDR only. "
+                "HUD Mask is off by default. Draw fixed screen regions per window and resolution; recapture after layout changes. SDR only. "
                 "Stop before changing settings. Ctrl+Alt+Q: stop · Ctrl+Alt+F9: panel · Ctrl+Alt+F8: toggle NR."
             ),
             style="Subtitle.TLabel",
@@ -504,7 +504,7 @@ class DailyApp:
             self.targets = list(self.controller.list_targets())
         except Exception as exc:
             _write_error_log("Failed to enumerate target windows")
-            self.messagebox.showerror(APP_TITLE, f"Could not refresh game windows.\n\n{exc}")
+            self.messagebox.showerror(APP_TITLE, f"Could not refresh application windows.\n\n{exc}")
             self.targets = []
 
         self.target_by_display.clear()
@@ -516,7 +516,8 @@ class DailyApp:
             height = target.get("height", "?")
             pid = target.get("pid", "?")
             hwnd = target.get("hwnd", "?")
-            label = f"{title}  ·  {width}×{height}  ·  PID {pid}"
+            executable = PureWindowsPath(target.get('exe', '')).name
+            label = f"{title}  ·  {executable}  ·  {width}×{height}  ·  PID {pid}"
             if label in self.target_by_display:
                 label = f"{label}  ·  HWND {hwnd}"
             self.target_by_display[label] = target
@@ -529,15 +530,16 @@ class DailyApp:
         if not labels:
             self.target_var.set("")
             if not self.controller.busy:
-                self.status_detail_var.set("No eligible game window found. Open the GeForce NOW game, then refresh.")
+                self.status_detail_var.set("No eligible application window found. Open or restore an application, then refresh.")
         elif selected_label:
             self.target_var.set(selected_label)
         elif previous_identity is not None:
             self.target_var.set("")
             if not self.controller.busy:
-                self.status_detail_var.set("The selected game changed or closed. Choose a game window before starting.")
+                self.status_detail_var.set("The selected window changed or closed. Choose an application window before starting.")
         else:
-            self.target_var.set(labels[0])
+            # Do not implicitly choose a personal document or unrelated app.
+            self.target_var.set("")
         self._refresh_mask_status()
 
     def save_preferences(self) -> None:
@@ -562,7 +564,7 @@ class DailyApp:
     def start(self) -> None:
         target = self.target_by_display.get(self.target_var.get())
         if not target:
-            self.messagebox.showwarning(APP_TITLE, "Choose an eligible GeForce NOW game window first.")
+            self.messagebox.showwarning(APP_TITLE, "Choose an eligible application window first.")
             return
         try:
             settings = self._settings_from_form()
@@ -645,7 +647,7 @@ class DailyApp:
     ) -> None:
         normalized = state if state in {"idle", "starting", "running", "suspended", "stopping", "stopped", "error"} else "error"
         if normalized == 'idle' and not self.targets:
-            detail = 'No eligible GFN game found. Open a game, then click Refresh.'
+            detail = 'No eligible application window found. Open or restore an application, then click Refresh.'
         self._last_state = normalized
         self.status_state_var.set(normalized.upper())
         self.status_detail_var.set(detail)

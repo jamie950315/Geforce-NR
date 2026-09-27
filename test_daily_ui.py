@@ -17,6 +17,18 @@ class Variable:
 
 
 class CloseRecoveryTests(unittest.TestCase):
+    def test_new_list_requires_explicit_selection_and_shows_executable(self):
+        app = DailyApp.__new__(DailyApp)
+        app.target_var = Variable()
+        app.target_by_display = {}
+        app.target_combo = SimpleNamespace(configure=lambda **kwargs: None)
+        app.controller = SimpleNamespace(list_targets=lambda: [dict(hwnd=1, pid=2, created=3,
+            title='Document', exe=r'C:\Apps\editor.exe', width=960, height=640)], busy=False)
+        app._refresh_mask_status = lambda: None
+        app.refresh_targets()
+        self.assertEqual(app.target_var.get(), '')
+        self.assertIn('editor.exe', next(iter(app.target_by_display)))
+
     def test_window_fit_includes_title_bar_and_work_area_origin(self):
         w, h, x, y = fit_window_bounds((854, 1052), (100, 30, 2660, 1420), (16, 39))
         self.assertEqual((w, h), (854, 1052))
@@ -63,7 +75,7 @@ class CloseRecoveryTests(unittest.TestCase):
                 app._refresh_mask_status = lambda: None
                 app.refresh_targets()
                 self.assertEqual(app.target_var.value, '')
-                self.assertIn('selected game changed', app.status_detail_var.value)
+                self.assertIn('selected window changed', app.status_detail_var.value)
 
     def test_target_close_clears_stale_selection_once(self):
         app = DailyApp.__new__(DailyApp)
@@ -76,7 +88,7 @@ class CloseRecoveryTests(unittest.TestCase):
         combo_updates, mask_refreshes, polls = [], [], []
         app.target_combo = SimpleNamespace(configure=lambda **kwargs: combo_updates.append(kwargs))
         app.controller = SimpleNamespace(poll=lambda: dict(state='stopped',
-            detail='The selected GFN window closed.', end_reason='target_closed'))
+            detail='The selected application window closed.', end_reason='target_closed'))
         app._set_status = lambda **kwargs: setattr(app, '_last_state', kwargs['state'])
         app._refresh_mask_status = lambda: mask_refreshes.append(True)
         app._controller_busy = lambda: False

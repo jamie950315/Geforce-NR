@@ -1,7 +1,8 @@
 # Geforce-NR
 
 Experimental Windows controls and validation helpers for local Neural Rendering
-on a GeForce NOW window, with optional, user-drawn HUD protection.
+on a selected application window, including GeForce NOW, with optional,
+user-drawn HUD protection.
 
 ## Public repository scope
 
@@ -51,32 +52,43 @@ They do not replace Core/Lab binaries or promote a production default.
 
 ## Daily desktop app
 
-Open **Geforce NR** from the Windows desktop. Start the GFN game first,
-refresh the game list if needed, and click **Start**. HUD Mask is off by default:
-NR 1280x720 with NVOFA 1280x720 / G2 / Fast and full 2560x1440 residual output
-at the measured source size. **Stop safely** ends only this panel's owned session.
+Open **Geforce NR** from the Windows desktop. Open or restore the application,
+click **Refresh**, explicitly select its **Application window**, and click
+**Start**. Entries show the title, executable, size, and PID. The list includes
+ordinary visible top-level application windows, not only GeForce NOW. Minimized,
+hidden/cloaked, tiny (under 64 pixels on either axis), auxiliary tool, desktop,
+and NR's own windows are excluded, as are processes whose identity cannot be
+verified. Protected content and windows that Windows Graphics Capture cannot
+capture are not guaranteed to work; listing a window does not establish capture
+compatibility.
+
+HUD Mask is off by default. NR720 with flow width 1280 / G2 / Fast remains the
+default; actual processing and residual-output dimensions follow the selected
+source and are shown in the panel. At the measured 2560x1440 source size, NR and
+flow are 1280x720. **Stop safely** ends only this panel's owned session.
+Core/Lab and the GFN-only diagnostic capture helpers are unchanged.
 
 The native panel provides NR and bypass modes plus an optional HUD Mask checkbox; NR height, flow
 width, grid, and preset controls; **Save preferences**, **Restore recommended**,
 and **Open run folder**. Stop before changing processing settings. Preferences
 are stored locally in `daily-settings.json`. No browser or web server is used.
 
-Choose **Draw / edit custom** to capture the selected visible game window and
+Choose **Draw / edit custom** to capture the selected visible application window and
 drag rectangular protection regions. The editor supports selection, deletion,
 Undo, Clear, Cancel, and **Save & use** (Ctrl+S). Saving nonempty regions selects
 the custom mask and enables it; saving an empty profile disables the mask.
 The original Cyberpunk 2077 1440p preset remains a separate read-only option.
 The panel reports saved-region count and profile readiness. Enabling an empty
 or invalid mask disables Start; leaving the mask off still permits NR.
-If the selected game window changes identity or size while the panel is open,
+If the selected application window changes identity or size while the panel is open,
 refresh and select it again. Daily launch binds the selected PID, creation
 identity, title, and geometry; it cannot silently follow a reused HWND. An
-active daily run stops if the game geometry changes, including when HUD Mask
+active daily run stops if the window geometry changes, including when HUD Mask
 is off. Refresh and select the new size before restarting. Diagnostic CLI runs
 retain their separate resize behavior. In one observed Cyberpunk exit, the GFN
 window kept its identity while changing from 2560x1440 to 2578x1398 and
 showing Steam; this size check prevents daily NR from continuing on that page.
-When a daily run ends because the selected GFN window closes or changes size,
+When a daily run ends because the selected application window closes or changes size,
 the panel clears the stale selection and requires **Refresh** before Start.
 
 Select a rectangle to edit `x0`, `y0`, `x1`, and `y1` in source pixels, then use
@@ -93,10 +105,10 @@ becoming an empty, overwriteable mask.
 The panel measures its Windows frame decoration and centers its initial size
 inside the usable desktop, preventing a taller layout from opening below the taskbar.
 
-Custom regions are stored per normalized game-window title and exact resolution
-under `masks/`. Reopening the game does not require redrawing when these match.
+Custom regions are stored per normalized window title and exact resolution
+under `masks/`. Reopening the application does not require redrawing when these match.
 Changing resolution requires a matching profile; old masks are never stretched.
-Stop processing before editing, keep the entire game visible, and avoid other
+Stop processing before editing, keep the entire selected window visible, and avoid other
 overlays during capture. The preview is captured in memory, not saved as a
 screenshot. Rectangle cores preserve source pixels with a four-pixel outer
 feather; background inside a rectangle is preserved too. This is manual rectangle
@@ -109,8 +121,9 @@ backup. Subsequent explicit checkbox choices persist. Generated HGM files are
 content-addressed, so editing a profile does not overwrite a running mask.
 
 Daily sessions run until stopped, the target closes, or an engine safety check
-ends them; the diagnostic 60-second timer is not used. Switching to another app
-(including the panel) suspends the overlay. Return to the game to resume.
+ends them; the diagnostic 60-second timer is not used. Switching to another window
+(including another window of the same app or the panel) suspends the overlay.
+Return to the selected window to resume.
 Ctrl+Alt+F8 toggles NR temporarily, Ctrl+Alt+F9 opens this panel, and Ctrl+Alt+Q
 stops processing. Closing an active panel asks to stop, then waits for cleanup.
 If the UI process exits unexpectedly, the controller detects the lost owner

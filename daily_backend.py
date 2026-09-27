@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import uuid
+from application_windows import enumerate_application_windows
 
 DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom')
 CHOICES = dict(nr_height=(720, 900, 1080), flow_width=(320, 640, 960, 1280),
@@ -65,7 +66,7 @@ class DailyController:
         self.stop_pending = False
         self.stop_sent = False
         self.state = 'idle'
-        self.detail = 'Choose a running GFN game, then start.'
+        self.detail = 'Choose an application window, then start.'
         self.launch_log = None
         self.metrics = {}
         self.owner_token = None
@@ -79,10 +80,11 @@ class DailyController:
 
     def list_targets(self):
         result = []
-        for target in self.win.enumerate():
-            if target.title.strip().lower() == 'geforce now':
+        for target in enumerate_application_windows(self.win):
+            try:
+                _, _, width, height = self.win.rect(target.hwnd)
+            except (OSError, RuntimeError):
                 continue
-            _, _, width, height = self.win.rect(target.hwnd)
             result.append(dict(target.to_dict(), width=width, height=height))
         return result
 
@@ -96,11 +98,12 @@ class DailyController:
 
     def _current_target(self, target):
         current = next((t for t in self.list_targets() if
-            (t['hwnd'], t['pid'], t['created']) == (target['hwnd'], target['pid'], target['created'])), None)
+            (t['hwnd'], t['pid'], t['created'], t.get('exe')) ==
+            (target['hwnd'], target['pid'], target['created'], target.get('exe'))), None)
         if current is None or current['title'] != target['title'] or self.win.u.IsIconic(current['hwnd']):
-            raise RuntimeError('The selected game changed, closed, or was minimized. Restore it and refresh.')
+            raise RuntimeError('The selected window changed, closed, or was minimized. Restore it and refresh.')
         if (current['width'], current['height']) != (target['width'], target['height']):
-            raise RuntimeError('The selected game size changed. Refresh the game list before starting.')
+            raise RuntimeError('The selected window size changed. Refresh the window list before starting.')
         return current
 
     def load_mask_profile(self, target):
@@ -113,7 +116,7 @@ class DailyController:
             return dict(usable=True, detail='HUD Mask is not used in bypass mode.')
         enabled = value['mode'] == 'guard'
         if not target:
-            return dict(usable=not enabled, detail='Choose a game window to inspect its mask profile.')
+            return dict(usable=not enabled, detail='Choose an application window to inspect its mask profile.')
         prefix = 'Mask enabled. ' if enabled else 'Mask off. '
         try:
             if value['mask_profile'] == 'cyberpunk':
@@ -127,7 +130,7 @@ class DailyController:
             if count:
                 detail = f'{count} saved region(s) for {target["width"]} x {target["height"]}.'
             else:
-                detail = 'No saved regions for this game and size. Draw regions before enabling the mask.'
+                detail = 'No saved regions for this window and size. Draw regions before enabling the mask.'
             return dict(usable=not enabled or count > 0, detail=prefix+detail)
         except (OSError, ValueError) as exc:
             return dict(usable=not enabled, detail=prefix+'Profile unavailable: '+str(exc))
@@ -138,7 +141,7 @@ class DailyController:
             raise RuntimeError('Stop processing before editing the mask')
         current = self._current_target(target)
         if (current['width'], current['height']) != (target['width'], target['height']):
-            raise ValueError('Game size changed. Refresh and capture a new preview before saving.')
+            raise ValueError('Window size changed. Refresh and capture a new preview before saving.')
         return save_profile(self.root, target, rectangles)
 
     def capture_target(self, target):
@@ -151,22 +154,22 @@ class DailyController:
                 raise RuntimeError('Stop the active renderer before capturing an unprocessed preview')
         current = self._current_target(target)
         if (current['width'], current['height']) != (target['width'], target['height']):
-            raise ValueError('Game size changed. Refresh the game list first.')
+            raise ValueError('Window size changed. Refresh the window list first.')
         self.win.u.SetForegroundWindow.argtypes = [wintypes.HWND]
         self.win.u.SetForegroundWindow.restype = wintypes.BOOL
         if self.win.u.GetForegroundWindow() != current['hwnd']:
             self.win.u.SetForegroundWindow(current['hwnd'])
         time.sleep(.25)
         if self.win.u.GetForegroundWindow() != current['hwnd']:
-            raise RuntimeError('The game lost foreground; no preview was captured')
+            raise RuntimeError('The window lost foreground; no preview was captured')
         x, y, width, height = self.win.rect(current['hwnd'])
         if (width, height) != (target['width'], target['height']):
-            raise ValueError('Game size changed during capture. Refresh and capture again.')
+            raise ValueError('Window size changed during capture. Refresh and capture again.')
         preview = capture_rectangle(x, y, width, height)
         self._current_target(current)
         if (self.win.u.GetForegroundWindow() != current['hwnd']
                 or self.win.rect(current['hwnd']) != (x, y, width, height)):
-            raise RuntimeError('The game changed during capture; preview discarded')
+            raise RuntimeError('The window changed during capture; preview discarded')
         return dict(width=width, height=height, ppm=preview)
 
     def start(self, target, settings):
@@ -183,7 +186,7 @@ class DailyController:
             else:
                 profile = self.load_mask_profile(current)
                 if not profile or not profile['rectangles']:
-                    raise ValueError('No custom regions for this game and size. Draw and save regions, or turn off HUD Mask.')
+                    raise ValueError('No custom regions for this window and size. Draw and save regions, or turn off HUD Mask.')
                 mask = build_mask(self.root, current)
             validate_mask(mask, current['width'], current['height'])
         for folder in (self.root, self.root.parent/'gfn-nr-core', self.root.parent/'gfn-nvofa-lab-20260920',
@@ -221,7 +224,7 @@ class DailyController:
             if not self.win.u.SetForegroundWindow(current['hwnd']):
                 raise RuntimeError('Windows declined foreground activation')
         except Exception:
-            self.detail += ' Switch to the game window to resume processing.'
+            self.detail += ' Switch to the application window to resume processing.'
 
     def stop(self):
         if self.busy:
@@ -258,8 +261,8 @@ class DailyController:
                 self._send_stop()
                 if not self.stop_pending and self.metrics:
                     self.state = 'suspended' if self.metrics.get('suspended') else 'running'
-                    self.detail = ('Paused while another app is foreground. Return to the game to resume.'
-                        if self.state == 'suspended' else 'Processing the selected game. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens this panel.')
+                    self.detail = ('Paused while another window is foreground. Return to the selected window to resume.'
+                        if self.state == 'suspended' else 'Processing the selected window. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens this panel.')
                     if self.state == 'running' and self.metrics.get('settings', {}).get('bypass'):
                         self.detail = 'Bypass is active: showing the original source. Ctrl+Alt+F8 toggles NR.'
             else:
@@ -269,8 +272,8 @@ class DailyController:
                 if self.process.returncode == 0 and result.get('exit_code') == 0:
                     self.state = 'stopped'
                     self.detail = {
-                        'target_resized': 'Game window size changed. Refresh the game list before starting again.',
-                        'target_closed': 'The selected GFN window closed. Open a game and refresh the game list.',
+                        'target_resized': 'Application window size changed. Refresh the window list before starting again.',
+                        'target_closed': 'The selected application window closed. Open an application and refresh the window list.',
                     }.get(end_reason, 'Session ended: ' + result.get('state', 'stopped'))
                 else:
                     warnings = self.metrics.get('warnings', [])

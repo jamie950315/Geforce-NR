@@ -9,6 +9,21 @@ from daily_backend import DEFAULTS, DailyController, atomic_json, validated, mig
 
 
 class DailyTests(unittest.TestCase):
+    def test_lists_general_application_targets(self):
+        from application_windows import ApplicationTarget
+        c = DailyController.__new__(DailyController)
+        c.win = SimpleNamespace(rect=lambda _: (10, 20, 960, 640))
+        target = ApplicationTarget(1, 2, r'C:\Apps\editor.exe', 3, 'Document')
+        with patch('daily_backend.enumerate_application_windows', return_value=[target]):
+            self.assertEqual(c.list_targets(), [dict(target.to_dict(), width=960, height=640)])
+
+    def test_changed_executable_is_rejected(self):
+        c = DailyController.__new__(DailyController)
+        target = dict(hwnd=1, pid=2, created=3, title='Document', exe='editor.exe')
+        c.list_targets = lambda: [dict(target, exe='other.exe')]
+        with self.assertRaisesRegex(RuntimeError, 'selected window changed'):
+            c._current_target(target)
+
     def test_preview_is_discarded_if_foreground_changes_during_capture(self):
         with tempfile.TemporaryDirectory() as folder:
             c = DailyController.__new__(DailyController)
@@ -52,7 +67,7 @@ class DailyTests(unittest.TestCase):
         target = dict(hwnd=1, pid=2, created=3, title='Game A')
         c.list_targets = lambda: [dict(target, title='Game B')]
         c.win = SimpleNamespace(u=SimpleNamespace(IsIconic=lambda hwnd: False))
-        with self.assertRaisesRegex(RuntimeError, 'selected game changed'):
+        with self.assertRaisesRegex(RuntimeError, 'selected window changed'):
             c._current_target(target)
 
     def test_changed_game_size_requires_refresh(self):
@@ -60,7 +75,7 @@ class DailyTests(unittest.TestCase):
         target = dict(hwnd=1, pid=2, created=3, title='Game A', width=2560, height=1440)
         c.list_targets = lambda: [dict(target, width=1920, height=1080)]
         c.win = SimpleNamespace(u=SimpleNamespace(IsIconic=lambda hwnd: False))
-        with self.assertRaisesRegex(RuntimeError, 'game size changed'):
+        with self.assertRaisesRegex(RuntimeError, 'window size changed'):
             c._current_target(target)
 
     def test_optional_mask_migration_preserves_processing(self):
@@ -145,7 +160,7 @@ class DailyTests(unittest.TestCase):
             snapshot = c.poll()
             self.assertEqual(snapshot['state'], 'stopped')
             self.assertEqual(snapshot['end_reason'], 'target_closed')
-            self.assertIn('Open a game and refresh', snapshot['detail'])
+            self.assertIn('Open an application and refresh', snapshot['detail'])
 
 
 if __name__ == '__main__':

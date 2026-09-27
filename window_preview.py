@@ -25,7 +25,7 @@ def capture_rectangle(x, y, width, height):
     vx, vy, vw, vh = (u.GetSystemMetrics(i) for i in (76, 77, 78, 79))
     if not (64 <= width <= 7680 and 64 <= height <= 4320 and vx <= x and vy <= y
             and x+width <= vx+vw and y+height <= vy+vh):
-        raise ValueError('Restore the entire game window on screen before drawing a mask')
+        raise ValueError('Restore the entire application window on screen before drawing a mask')
 
     class Header(ctypes.Structure):
         _fields_ = [('size', wt.DWORD), ('width', wt.LONG), ('height', wt.LONG),

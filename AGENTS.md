@@ -53,9 +53,10 @@ session; stop is bound to a unique owner token and the run/controller records,
 not the Windows venv bootstrap PID. Daily runs use `--daily --seconds 0`, disable
 per-frame trace logging, and stop if the owning UI PID/creation identity dies.
 Ctrl+Alt+F9 raises the owning panel. Normal close waits for safe stop; switching
-away from GFN suspends rendering. Preferences and diagnostic output stay local.
+away from the selected window suspends rendering, including another window in
+the same process. Preferences and diagnostic output stay local.
 HUD Mask is optional and off by default. Custom rectangle profiles support
-selected GFN games and are bound to normalized window title plus exact geometry.
+selected application windows and are bound to normalized window title plus exact geometry.
 Only the built-in Cyberpunk preset requires Cyberpunk 2077 at 2560x1440.
 Preserve unrelated active controllers and desktop shortcuts.
 The panel and UI-probe scheduled tasks are on-demand only, with no autostart.
@@ -65,6 +66,13 @@ preserves the original Core/Lab paths and internal singleton identifiers.
 The daily panel rechecks selected PID, process creation identity, title, and
 geometry before launch; the child verifies the same contract. A resized game
 stops any active daily run; diagnostic CLI runs retain their resize behavior.
+Daily selection uses `application_windows.py` for visible, restored top-level
+application windows with verifiable process identity. The panel requires explicit
+selection and shows executable/title/size/PID. Exclude shell, cloaked, tool, tiny,
+and NR-owned windows. The daily child uses the same enumerator; diagnostic CLI
+selection and GFN-specific capture tools still use their original restrictions.
+Do not relax those diagnostic capture guards when extending daily selection.
+Window eligibility does not guarantee WGC/DRM compatibility.
 One observed Cyberpunk exit kept the GFN HWND/title but changed geometry from
 2560x1440 to 2578x1398 and showed Steam, so HWND identity alone does not mark
 the end of a game session. A size change in daily mode now fails closed.
