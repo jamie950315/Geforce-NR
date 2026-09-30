@@ -107,6 +107,21 @@ identified extra structure enhancement as a contributor to dark-area grain.
 Clean reduces that enhancement, not source resolution or overall NR intensity;
 it is not a blur filter or universal temporal/face denoising claim. Keep pixel
 comparisons local and distinguish flat-region noise from real texture/edges.
+The appearance tab also exposes `hold_identical_frames`, default false. It is
+saved with daily processing preferences and forwarded to both Start paths.
+`stage_static_capture.py` stages `native-static-stable` only from the attested
+motion-repaired parent; it preserves every old worker and the neural runtime.
+`static_support.py` attests its policy and binaries before launch. CLI opt-in is
+`--hold-identical-frames`; HDR requires Color-preserving plus both queues, while
+SDR is supported. Full-source GPU comparison includes every FP16 HDR channel;
+any change resumes NR/flow. Identical rendered captures reuse output without
+advancing model/flow history. CAP1 without rendering, resets and reconfiguration
+must not reuse an older output. The comparison shares the existing capture/gray
+fence with a dedicated heap and four-byte result; the D3D11 wait stays required.
+Static face replay reduced mean pixel temporal variation; moving-face replay did
+not show consistent denoising. Never describe this as general grain/ghost removal
+or promote it to a default from these diagnostics. Pixel snapshots/HDR proof are
+excluded from timing qualification.
 Ctrl+Alt+F9 raises the owning panel. Normal close waits for safe stop; switching
 away from the selected window suspends rendering, including another window in
 the same process. Preferences and diagnostic output stay local.

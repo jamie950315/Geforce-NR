@@ -36,6 +36,7 @@ RECOMMENDED_SETTINGS: dict[str, Any] = {
     "hdr": False,
     "hdr_mapping": "color-preserving",
     "hdr_queued": False,
+    "hold_identical_frames": False,
 }
 
 MODE_LABELS = {
@@ -303,6 +304,7 @@ class DailyApp:
         self.hdr_var = self.tk.BooleanVar(value=False)
         self.hdr_mapping_var = self.tk.StringVar()
         self.hdr_queued_var = self.tk.BooleanVar(value=False)
+        self.hold_identical_frames_var = self.tk.BooleanVar(value=False)
         self.mask_profile_var = self.tk.StringVar()
         self.mask_summary_var = self.tk.StringVar()
         self.nr_height_var = self.tk.IntVar()
@@ -425,7 +427,7 @@ class DailyApp:
         self.hdr_mapping_combo.grid(row=0, column=1, sticky="ew")
         self.hdr_mapping_combo.bind('<<ComboboxSelected>>', self._hdr_options_changed)
         self.hdr_queued_check = self.ttk.Checkbutton(advanced,
-            text="Queued HDR + capture (experimental)", variable=self.hdr_queued_var)
+            text="Queued HDR + capture (experimental)", variable=self.hdr_queued_var, command=self._hdr_options_changed)
         self.hdr_queued_check.grid(row=10, column=0, sticky="w", pady=(10, 0))
         self.ttk.Label(advanced, style="Muted.TLabel", wraplength=340, justify="left",
             text="Requires HDR + Color-preserving. NR900 / flow height 720 / G2 / Fast tested near 120 FPS. NR1440 measured ~72 FPS, not 120.").grid(
@@ -512,6 +514,12 @@ class DailyApp:
         reset = self.ttk.Button(panel, text='Reset to Clean', command=self.reset_appearance)
         reset.grid(row=7, column=2, sticky='ew')
         self.appearance_controls.extend((save, reset))
+        self.hold_identical_frames_check = self.ttk.Checkbutton(panel,
+            text='Hold identical source frames (experimental)', variable=self.hold_identical_frames_var)
+        self.hold_identical_frames_check.grid(row=8,column=0,columnspan=3,sticky='w',pady=(14,3))
+        self.ttk.Label(panel,style='Muted.TLabel',wraplength=700,justify='left',
+            text='Reduces NR flicker on repeated pictures. Every source channel is compared; any change resumes processing. HDR requires Color-preserving + queued processing. Save preferences to retain this option.').grid(
+                row=9,column=0,columnspan=3,sticky='ew')
 
     def _load_appearance_settings(self) -> None:
         self._apply_appearance_to_form(getattr(self.controller, 'appearance_settings', preset_config('clean')))
@@ -669,6 +677,7 @@ class DailyApp:
         self.hdr_mapping_var.set(next(label for label, value in HDR_MAPPING_LABELS.items()
                                      if value == settings.get("hdr_mapping", "legacy")))
         self.hdr_queued_var.set(settings.get("hdr_queued", False))
+        self.hold_identical_frames_var.set(settings.get('hold_identical_frames',False))
         self.mask_profile_var.set(next(label for label, value in MASK_LABELS.items()
                                       if value == settings.get('mask_profile', 'custom')))
         self.nr_height_var.set(settings.get("nr_height", 720))
@@ -688,11 +697,14 @@ class DailyApp:
             "hdr": bool(self.hdr_var.get()),
             "hdr_mapping": HDR_MAPPING_LABELS[self.hdr_mapping_var.get()],
             "hdr_queued": bool(self.hdr_queued_var.get()),
+            "hold_identical_frames": bool(self.hold_identical_frames_var.get()),
         }
 
     def _hdr_options_changed(self, _event=None) -> None:
         if not self.hdr_var.get() or HDR_MAPPING_LABELS.get(self.hdr_mapping_var.get()) != 'color-preserving':
             self.hdr_queued_var.set(False)
+        if self.hdr_var.get() and not self.hdr_queued_var.get():
+            self.hold_identical_frames_var.set(False)
         self._refresh_mask_status()
 
     def _hdr_toggled(self) -> None:
@@ -830,7 +842,8 @@ class DailyApp:
             self.messagebox.showwarning(APP_TITLE, 'Select a Chiaki window when multiple installations or an unrelated application are listed.')
             return
         try:
-            self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form())
+            self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form(),
+                hold_identical_frames=bool(self.hold_identical_frames_var.get()))
             self._last_state = 'starting'
             self.status_state_var.set('STARTING')
             self.status_detail_var.set('Preparing Chiaki, physical-pixel sizing, NR and Lossless Scaling…')
@@ -979,6 +992,9 @@ class DailyApp:
         self.hdr_queued_check.configure(state="normal" if self.hdr_var.get()
             and HDR_MAPPING_LABELS.get(self.hdr_mapping_var.get()) == 'color-preserving'
             and not busy and not self._closing else "disabled")
+        self.hold_identical_frames_check.configure(state='normal' if not busy and not self._closing
+            and (not self.hdr_var.get() or (self.hdr_queued_var.get()
+                and HDR_MAPPING_LABELS.get(self.hdr_mapping_var.get())=='color-preserving')) else 'disabled')
         editable = not busy and not self._closing and MODE_LABELS.get(self.mode_var.get()) != 'bypass'
         self.mask_check.configure(state='normal' if editable else 'disabled')
         self.mask_combo.configure(state='readonly' if editable else 'disabled')

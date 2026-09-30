@@ -14,10 +14,10 @@ from appearance_presets import (APPEARANCE_PRESETS, appearance_cli_args, preset_
                                 strict_json_loads, validate_appearance_config)
 from shared_json import read_json
 
-DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False)
+DEFAULTS = dict(nr_height=720, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False, hold_identical_frames=False)
 CHOICES = dict(nr_height=NR_HEIGHTS, flow_width=(320, 640, 960, 1280),
                flow_grid=(2, 4), flow_preset=('fast', 'medium', 'slow'), mode=('guard', 'nr', 'bypass'),
-               mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'), hdr_queued=(False, True))
+               mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'), hdr_queued=(False, True), hold_identical_frames=(False,True))
 
 
 def validated(value):
@@ -28,6 +28,8 @@ def validated(value):
             raise ValueError('Unsupported setting: ' + key)
     if value['hdr_queued'] and (not value['hdr'] or value['hdr_mapping'] != 'color-preserving'):
         raise ValueError('Queued HDR + capture requires HDR with color-preserving mapping')
+    if value['hold_identical_frames'] and value['hdr'] and not value['hdr_queued']:
+        raise ValueError('Hold identical HDR frames requires queued HDR + capture')
     return dict(value)
 
 
@@ -52,6 +54,8 @@ def atomic_json(path, value):
 
 
 def migrate_settings(value):
+    if isinstance(value,dict) and 'hold_identical_frames' not in value:
+        value=dict(value,hold_identical_frames=False)
     if isinstance(value, dict) and 'hdr_queued' not in value:
         value = dict(value, hdr_queued=False)
     if isinstance(value, dict) and 'hdr_mapping' not in value:
@@ -78,7 +82,8 @@ class DailyController:
             previous = read_json(self.preference_file)
             self.settings = migrate_settings(previous)
             if self.settings != previous:
-                backup = self.root/('daily-settings-before-hdr-queued.json' if 'hdr_queued' not in previous
+                backup = self.root/('daily-settings-before-static-stable.json' if 'hold_identical_frames' not in previous and 'hdr_queued' in previous
+                                    else 'daily-settings-before-hdr-queued.json' if 'hdr_queued' not in previous
                                     else 'daily-settings-before-hdr-color.json' if 'hdr' in previous
                                     else 'daily-settings-before-hdr.json' if 'mask_profile' in previous
                                     else 'daily-settings-before-optional-mask.json')
@@ -209,7 +214,7 @@ class DailyController:
             raise RuntimeError('The window changed during capture; preview discarded')
         return dict(width=width, height=height, ppm=preview)
 
-    def start_chiaki_chain(self, target=None, appearance_config=None):
+    def start_chiaki_chain(self, target=None, appearance_config=None, hold_identical_frames=False):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
         appearance = validate_appearance_config(self.appearance_settings if appearance_config is None else appearance_config)
@@ -219,7 +224,7 @@ class DailyController:
         # Retain ownership even if start raises after partially launching, so
         # the panel can still poll cleanup and request an authenticated stop.
         self.chain = chain
-        chain.start(current, appearance_config=appearance)
+        chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames)
 
     def start(self, target, settings, *, persist=True, fps=120, panel_owner=None,
               appearance_preset='inherited', appearance_config=None):
@@ -240,10 +245,14 @@ class DailyController:
         self.chain = None
         value = validated(settings)
         current = self._current_target(target)
+        if value['hold_identical_frames']:
+            from static_support import verify_static_build
+            verify_static_build(self.root)
         if value['hdr']:
             from hdr_support import require_hdr_display
+            extra = {'static_stable':True} if value['hold_identical_frames'] else {}
             require_hdr_display(self.root, current['hwnd'], value['hdr_mapping'],
-                                queued=value['hdr_queued'], capture_queued=value['hdr_queued'])
+                                queued=value['hdr_queued'], capture_queued=value['hdr_queued'], **extra)
         if value['mode'] == 'guard':
             from mask_profiles import build_mask, validate_mask
             if value['mask_profile'] == 'cyberpunk':
@@ -289,6 +298,8 @@ class DailyController:
             args += ['--hdr', '--hdr-mapping', value['hdr_mapping']]
         if value['hdr_queued']:
             args += ['--queued-hdr', '--capture-queued-hdr']
+        if value['hold_identical_frames']:
+            args += ['--hold-identical-frames']
         # This log is created outside the run, which the launcher creates exclusively.
         self.launch_log = self.root/'runs'/(name + '-launch.log')
         self.launch_log.parent.mkdir(exist_ok=True)

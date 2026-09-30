@@ -11,6 +11,36 @@ from appearance_presets import preset_config
 
 
 class DailyTests(unittest.TestCase):
+    def test_hold_identical_migration_preserves_preferences_and_backs_up(self):
+        old=dict(DEFAULTS,nr_height=1080,hdr=True,hdr_queued=True)
+        old.pop('hold_identical_frames')
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder); atomic_json(root/'daily-settings.json',old)
+            c=self.make_controller(root)
+            self.assertEqual(c.settings,dict(old,hold_identical_frames=False))
+            self.assertEqual(json.loads((root/'daily-settings-before-static-stable.json').read_text()),old)
+        for value in (1,'true',None):
+            with self.assertRaises(ValueError): validated(dict(DEFAULTS,hold_identical_frames=value))
+        with self.assertRaises(ValueError): validated(dict(DEFAULTS,hdr=True,hold_identical_frames=True))
+
+    def test_hold_identical_preflight_precedes_save_and_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            c=self.make_controller(Path(folder))
+            target=dict(hwnd=123,pid=456,created=789,title='Replay',width=2560,height=1440)
+            c._current_target=Mock(return_value=target)
+            c.win=SimpleNamespace(identity=lambda _:('python',10),u=SimpleNamespace(SetForegroundWindow=Mock(return_value=True)))
+            settings=dict(DEFAULTS,hold_identical_frames=True)
+            with patch('static_support.verify_static_build',side_effect=RuntimeError('Invalid worker')), \
+                 patch('daily_backend.subprocess.Popen') as launch:
+                with self.assertRaisesRegex(RuntimeError,'Invalid worker'): c.start(target,settings)
+                launch.assert_not_called()
+            self.assertFalse(c.preference_file.exists())
+            with patch('static_support.verify_static_build') as verify, patch('daily_backend.subprocess.Popen') as launch:
+                c.start(target,settings)
+            verify.assert_called_once_with(c.root)
+            self.assertIn('--hold-identical-frames',launch.call_args.args[0])
+            self.assertEqual(json.loads(c.preference_file.read_text()),settings)
+
     def make_controller(self, root):
         with patch.dict('sys.modules', {'gfn_core.windows': SimpleNamespace(Win32=lambda: Mock())}), \
                 patch.object(sys, 'path', list(sys.path)):
@@ -89,7 +119,7 @@ class DailyTests(unittest.TestCase):
         with patch.dict('sys.modules', {'chain_controller': SimpleNamespace(ChainController=lambda *args: chain)}):
             c.start_chiaki_chain()
         c._current_target.assert_not_called()
-        chain.start.assert_called_once_with(None, appearance_config=preset_config('clean'))
+        chain.start.assert_called_once_with(None, appearance_config=preset_config('clean'),hold_identical_frames=False)
 
     def test_chain_dispatch_routes_status_stop_and_blocks_preferences(self):
         c = DailyController.__new__(DailyController)
@@ -102,7 +132,7 @@ class DailyTests(unittest.TestCase):
         with patch.dict('sys.modules', {'chain_controller': SimpleNamespace(ChainController=factory)}):
             c.start_chiaki_chain(target)
         factory.assert_called_once_with(c.root, c.win)
-        chain.start.assert_called_once_with(target, appearance_config=preset_config('clean'))
+        chain.start.assert_called_once_with(target, appearance_config=preset_config('clean'),hold_identical_frames=False)
         self.assertTrue(c.busy)
         self.assertEqual(c.poll(), {'state': 'running', 'chain': True})
         with self.assertRaisesRegex(RuntimeError, 'Stop the current session'):

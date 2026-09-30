@@ -6,6 +6,7 @@ daily-settings-before-optional-mask.json
 daily-settings-before-hdr.json
 daily-settings-before-hdr-color.json
 daily-settings-before-hdr-queued.json
+daily-settings-before-static-stable.json
 masks/
 daily-ui-error.log
 daily-probe.json

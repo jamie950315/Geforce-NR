@@ -128,6 +128,7 @@ def main():
     ap.add_argument('--queued-hdr', action='store_true', help='Opt-in isolated queued HDR worker')
     ap.add_argument('--capture-queued-hdr', action='store_true', help='Opt-in swizzle/gray queue experiment; requires queued HDR')
     ap.add_argument('--hdr-proof', action='store_true', help='One local FP16 readback; not timing evidence')
+    ap.add_argument('--hold-identical-frames', action='store_true', help='Opt-in exact full-source equality; hold the last verified output for duplicates')
     ap.add_argument('--owner-pid', type=int)
     ap.add_argument('--owner-created', type=int)
     ap.add_argument('--owner-token')
@@ -155,6 +156,9 @@ def main():
         raise ValueError('Capture queue requires queued HDR')
     if a.hdr_proof and not a.hdr:
         raise ValueError('HDR proof requires HDR output')
+    if a.hold_identical_frames and (any((a.probe_worker,a.fixed_worker,a.original_worker,a.live_pair_worker,a.repaired_worker))
+            or (a.hdr and not a.capture_queued_hdr)):
+        raise ValueError('Hold identical frames requires its isolated worker; HDR also requires both color-preserving queues')
     if a.hdr and any((a.probe_worker, a.fixed_worker, a.original_worker, a.live_pair_worker, a.repaired_worker)):
         raise ValueError('HDR output requires the isolated HDR worker')
     if not a.name.replace('-', '').isalnum() or not (5 <= a.seconds <= 600 or (a.daily and a.seconds == 0)):
@@ -179,11 +183,16 @@ def main():
     if not a.original_worker:
         if a.hdr:
             from hdr_support import hdr_build_kind
-            kind = hdr_build_kind(a.hdr_mapping, a.queued_hdr, a.capture_queued_hdr)
+            kind = hdr_build_kind(a.hdr_mapping, a.queued_hdr, a.capture_queued_hdr, a.hold_identical_frames)
         else:
             kind = 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
+            if a.hold_identical_frames:
+                kind = 'static-stable'
         native = ROOT / ('native-' + kind)
         build = load(ROOT / (kind + '-build.json'))
+        if a.hold_identical_frames:
+            from static_support import verify_static_build
+            native,build = verify_static_build(ROOT)
         if digest(native/'nvngx.dll') != build['worker_sha256'] or digest(native/'nvngx_dlssnr.dll') != integrity['runtime_sha256']:
             raise RuntimeError('Diagnostic binary integrity mismatch')
         integrity = dict(integrity, worker=str(native/'nvngx.dll'), worker_sha256=build['worker_sha256'], diagnostic=kind != 'repaired', timing_repaired=kind == 'repaired')
@@ -205,7 +214,8 @@ def main():
     hdr_display = None
     if a.hdr:
         from hdr_support import require_hdr_display
-        hdr_display = require_hdr_display(ROOT, target.hwnd, a.hdr_mapping, a.queued_hdr, a.capture_queued_hdr)
+        hdr_display = require_hdr_display(ROOT, target.hwnd, a.hdr_mapping, a.queued_hdr, a.capture_queued_hdr,
+                                          static_stable=a.hold_identical_frames)
     if a.daily:
         actual = target.to_dict()
         if ((actual['pid'], actual['created'], actual['title']) !=
@@ -258,6 +268,7 @@ def main():
                 hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof, hdr_mapping=a.hdr_mapping,
                 hdr_queued=a.queued_hdr, hdr_capture_queued=a.capture_queued_hdr,
                 hdr_motion_repaired=a.capture_queued_hdr,
+                hold_identical_frames=a.hold_identical_frames,
                 owner=dict(pid=a.owner_pid, created=a.owner_created, token=a.owner_token) if a.daily else None,
                 panel_owner=dict(pid=a.panel_pid, created=a.panel_created) if a.panel_pid is not None else None,
                 live_pair=live_pair, overlay_alpha=a.overlay_alpha, gpu_sample_interval=a.gpu_sample_interval, integrity=integrity, controller_sha256=digest(Path(__file__)),

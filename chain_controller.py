@@ -53,17 +53,22 @@ class ChainController:
     def busy(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, target, appearance_config=None):
+    def start(self, target, appearance_config=None, hold_identical_frames=False):
         if self.busy:
             raise RuntimeError('This panel already owns a Chiaki chain')
         appearance = validate_appearance_config(appearance_config if appearance_config is not None else preset_config('clean'))
+        if type(hold_identical_frames) is not bool:
+            raise ValueError('Hold identical frames must be a boolean')
+        if hold_identical_frames:
+            from static_support import verify_static_build
+            verify_static_build(self.root)
         python = self.root.parent/'gfn-nr-overlay/.venv/Scripts/pythonw.exe'
         if not python.is_file():
             raise RuntimeError('The Windows overlay Python runtime is required for Chiaki + LS')
         self.token = uuid.uuid4().hex
         self.job = self.root/'runs'/('chiaki-chain-'+time.strftime('%Y%m%d-%H%M%S')+'-'+self.token[:8])
         self.job.mkdir(parents=True)
-        request = dict(token=self.token, target=target, appearance=appearance, owner_pid=os.getpid(),
+        request = dict(token=self.token, target=target, appearance=appearance, hold_identical_frames=hold_identical_frames, owner_pid=os.getpid(),
                        owner_created=self.win.identity(os.getpid())[1])
         atomic(self.job/'request.json', request)
         self.last = dict(state='starting', detail='Checking Chiaki, HDR and Lossless Scaling...',
@@ -136,6 +141,9 @@ def supervise(root, folder):
     if not valid_token(token):
         raise RuntimeError('Invalid chain request token')
     appearance = validate_appearance_config(request.get('appearance', preset_config('clean')))
+    hold_identical_frames=request.get('hold_identical_frames',False)
+    if type(hold_identical_frames) is not bool:
+        raise ValueError('Hold identical frames must be a boolean')
     appearance_label = next(label for label, key in APPEARANCE_LABELS.items() if key == appearance['preset'])
     controller = DailyController(root)
     win = controller.win
@@ -177,6 +185,9 @@ def supervise(root, folder):
             raise InterruptedError('Playback startup cancelled')
 
     try:
+        if hold_identical_frames:
+            from static_support import verify_static_build
+            verify_static_build(root)
         if pointer.exists():
             status('starting', 'Recovering the previous interrupted playback session...')
             recover(root, native, win, pointer)
@@ -205,7 +216,8 @@ def supervise(root, folder):
         native.configure_ls(preflight, folder, lambda value: save('ls_config', value))
         check_cancel()
         status('starting', f'Starting NR1080 ({appearance_label}) and hardware optical flow at 60 source FPS...')
-        preset = dict(DEFAULTS, nr_height=1080, hdr=True, hdr_mapping='color-preserving', hdr_queued=True)
+        preset = dict(DEFAULTS, nr_height=1080, hdr=True, hdr_mapping='color-preserving', hdr_queued=True,
+                      hold_identical_frames=hold_identical_frames)
         controller.start(target, preset, persist=False, fps=60,
                          panel_owner=(request['owner_pid'], request['owner_created']), appearance_config=appearance)
         save('nr_run', str(controller.run));save('nr_owner_token', controller.owner_token)

@@ -7,8 +7,8 @@ from appearance_presets import APPEARANCE_LABELS, SLIDER_RANGES, preset_config
 
 
 class Variable:
-    def __init__(self):
-        self.value = ''
+    def __init__(self, value=''):
+        self.value = value
         self.callbacks = []
 
     def set(self, value):
@@ -191,12 +191,13 @@ class CloseRecoveryTests(unittest.TestCase):
         target = dict(hwnd=1, exe='chiaki.exe')
         app._chiaki_target = lambda: target
         app.controller = SimpleNamespace(start_chiaki_chain=Mock())
+        app.hold_identical_frames_var = Variable(False)
         app._appearance_from_form = lambda: preset_config('clean')
         app._settings_from_form = Mock(side_effect=AssertionError('Must not read daily settings'))
         app.status_state_var, app.status_detail_var = Variable(), Variable()
         app._sync_controls = Mock()
         app.start_chiaki_chain()
-        app.controller.start_chiaki_chain.assert_called_once_with(target, appearance_config=preset_config('clean'))
+        app.controller.start_chiaki_chain.assert_called_once_with(target, appearance_config=preset_config('clean'),hold_identical_frames=False)
         app._settings_from_form.assert_not_called()
         self.assertEqual(app._last_state, 'starting')
 
@@ -208,11 +209,12 @@ class CloseRecoveryTests(unittest.TestCase):
         self.assertTrue(app._chiaki_can_start())
         self.assertIsNone(app._chiaki_target())
         app.controller = SimpleNamespace(start_chiaki_chain=Mock())
+        app.hold_identical_frames_var = Variable(True)
         app._appearance_from_form = lambda: preset_config('clean')
         app.status_state_var, app.status_detail_var = Variable(), Variable()
         app._sync_controls = Mock()
         app.start_chiaki_chain()
-        app.controller.start_chiaki_chain.assert_called_once_with(None, appearance_config=preset_config('clean'))
+        app.controller.start_chiaki_chain.assert_called_once_with(None, appearance_config=preset_config('clean'),hold_identical_frames=True)
         app.target_var.set('other')
         self.assertFalse(app._chiaki_can_start())
 
@@ -272,7 +274,7 @@ class CloseRecoveryTests(unittest.TestCase):
 
     def test_hdr_preference_round_trip_and_legacy_default(self):
         app = DailyApp.__new__(DailyApp)
-        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'hdr_queued', 'nr_height',
+        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'hdr_queued', 'hold_identical_frames', 'nr_height',
                      'flow_width', 'flow_grid', 'flow_preset'):
             setattr(app, name + '_var', Variable())
         for saved, expected in (({}, False), ({'hdr': True}, True),
@@ -300,6 +302,7 @@ class CloseRecoveryTests(unittest.TestCase):
     def test_incompatible_hdr_changes_explicitly_clear_queue_selection(self):
         app = DailyApp.__new__(DailyApp)
         app.hdr_var, app.hdr_mapping_var, app.hdr_queued_var = Variable(), Variable(), Variable()
+        app.hold_identical_frames_var = Variable(True)
         calls=[]
         app._refresh_mask_status=lambda: calls.append(True)
         for hdr, mapping, expected in ((True,'Color-preserving',True), (True,'Legacy',False),
@@ -358,13 +361,14 @@ class CloseRecoveryTests(unittest.TestCase):
         app = DailyApp.__new__(DailyApp)
         states = {}
         for name in ('target_combo', 'mode_combo', 'refresh_button', 'save_button',
-                     'restore_button', 'appearance_preset_combo', 'hdr_check', 'hdr_mapping_combo', 'hdr_queued_check', 'mask_check', 'mask_combo',
+                     'restore_button', 'appearance_preset_combo', 'hdr_check', 'hdr_mapping_combo', 'hdr_queued_check', 'hold_identical_frames_check', 'mask_check', 'mask_combo',
                      'edit_mask_button', 'start_button', 'chain_button', 'stop_button', 'open_run_button'):
             setattr(app, name, SimpleNamespace(configure=lambda name=name, **kwargs: states.update({name: kwargs['state']})))
         for name in ('nr_height_frame', 'flow_width_frame', 'flow_grid_frame', 'flow_preset_frame'):
             setattr(app, name, SimpleNamespace(winfo_children=lambda: []))
         app.mode_var = Variable()
         app.hdr_var = Variable()
+        app.hdr_queued_var = Variable(True)
         app.hdr_mapping_var = Variable()
         app.hdr_mapping_var.set('Color-preserving')
         app.target_var = Variable()

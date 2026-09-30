@@ -6,12 +6,45 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from chain_controller import ChainController, alive, atomic, job_path, recover, valid_token
+from chain_controller import ChainController, alive, atomic, job_path, recover, supervise, valid_token
 from shared_json import read_json
 from appearance_presets import preset_config
 
 
 class ChainOwnershipTests(unittest.TestCase):
+    def test_supervisor_rechecks_worker_before_recovery_or_stream_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);job=root/'runs'/'chiaki-chain-test';job.mkdir(parents=True)
+            atomic(job/'request.json',dict(token='a'*32,target=None,hold_identical_frames=True))
+            pointer=root/'chiaki-chain-active.json';atomic(pointer,dict(existing=True))
+            controller=Mock();controller.win.identity.return_value=('python',123)
+            with patch.dict('sys.modules',win32gui=SimpleNamespace()), \
+                 patch('daily_backend.DailyController',return_value=controller), \
+                 patch('chiaki_chain_native.NativeChain') as native, \
+                 patch('chiaki_connect.acquire_stream') as stream, \
+                 patch('chain_controller.recover') as recovery, \
+                 patch('static_support.verify_static_build',side_effect=RuntimeError('Changed worker')):
+                self.assertEqual(supervise(root,job),1)
+            stream.assert_not_called();recovery.assert_not_called()
+            native.return_value.prepare_window.assert_not_called()
+            self.assertEqual(read_json(pointer),dict(existing=True))
+            self.assertEqual(read_json(job/'outcome.json')['error'],'Changed worker')
+
+    def test_hold_identical_request_is_attested_before_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)/'app';root.mkdir()
+            runtime=root.parent/'gfn-nr-overlay/.venv/Scripts/pythonw.exe'
+            runtime.parent.mkdir(parents=True);runtime.touch()
+            c=ChainController(root,SimpleNamespace(identity=lambda _:('python',123)))
+            with patch('static_support.verify_static_build',side_effect=RuntimeError('Invalid worker')), \
+                 patch('chain_controller.subprocess.Popen') as launch:
+                with self.assertRaisesRegex(RuntimeError,'Invalid worker'): c.start(None,hold_identical_frames=True)
+                launch.assert_not_called()
+            self.assertFalse((root/'runs').exists())
+            with patch('static_support.verify_static_build'),patch('chain_controller.subprocess.Popen'):
+                c.start(None,hold_identical_frames=True)
+            self.assertIs(read_json(c.job/'request.json')['hold_identical_frames'],True)
+
     def test_atomic_status_updates_with_concurrent_reader(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'status.json';atomic(path,dict(counter=0))

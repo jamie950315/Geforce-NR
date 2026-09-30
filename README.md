@@ -129,6 +129,49 @@ settings/window state are preserved and reported rather than overwritten.
 Interrupted sessions retain an ignored recovery journal; the next one-click
 launch restores only the dead supervisor's exact resources before proceeding.
 
+### Repeated-picture stability
+
+**Hold identical source frames (experimental)** in **NR appearance** is an
+optional way to reduce NR flicker when WGC delivers the same picture again.
+It compares every full-resolution captured channel on the GPU, including FP16
+HDR values. An identical picture keeps the last rendered output and leaves NR
+and optical-flow history unchanged. Any source change resumes processing;
+explicit history resets and configuration changes still force an update.
+There is no pixel tolerance, gray-thumbnail equality test, or blur filter.
+
+The option defaults to off. **Save preferences** retains it; **Save NR appearance**
+only stores the appearance profile. Both **Start** and **Play Chiaki + NR + LSFG**
+use the current checkbox. SDR is supported; HDR requires **Color-preserving**
+and **Queued HDR + capture**. Start verifies the separate worker before saving
+settings. Missing or changed binaries block launch.
+
+On a controlled static HDR face replay at NR900 / flow1280 / G2 / Fast / Clean,
+24 steady snapshot requests produced 24 distinct outputs with the parent worker
+and two with this worker. Mean face-pixel temporal standard deviation decreased
+from 0.184 to 0.054 8-bit code values. Two observed capture changes were processed
+normally. This is a repeated-picture diagnostic, not a perceptual denoising
+percentage. Slow/fast moving-face sequences continued updating and showed
+similar detail, without consistent temporal-noise improvement. The option does
+not establish general grain removal, ghost-trail reduction, or live 120 FPS.
+Separate 30-second animated HDR replay samples at NR720 / flow1280 / G2 / Fast /
+Clean measured about 120 fresh FPS for both workers; host processing p95 was
+7.10 ms for the parent and 7.16 ms with comparison enabled. These short samples
+did not meet the evaluator's full duration gate and are not a new soak or
+live-stream acceptance.
+
+Stage it on the isolated Windows deployment after the attested motion-repaired
+parent exists:
+
+```powershell
+python stage_static_capture.py
+# SDR: add --hold-identical-frames to live_run.py.
+# HDR: also use --hdr --hdr-mapping color-preserving --queued-hdr --capture-queued-hdr.
+```
+
+Staging creates `native-static-stable` and `static-stable-build.json`; it refuses
+to overwrite an existing build. Core/Lab, the neural runtime, all previous
+workers, Clean appearance, and NR/flow defaults remain unchanged.
+
 ### General application windows
 
 Open **Geforce NR** from the Windows desktop. Open or restore the application,
