@@ -16,6 +16,17 @@ Preserve existing Core, Lab, runtime binaries, and launch defaults. Use a separa
 run directory. Do not claim 120 FPS acceptance from requested FPS or GPU pass time.
 Bind measurements to actual WGC geometry, source identity, binaries, and masks.
 Do not commit screenshots, game/account data, runtime output, or credentials.
+Manual transport helpers are source-only: `inspect_stall_network.ps1` reads
+route/adapter metadata; `capture_transport_stall.ps1` records bounded peer UDP
+prefixes and GFN PresentMon events under ignored `runs/`. Capture requires an
+elevated Windows shell, explicit peer/port, and no existing PktMon session or
+filters. Never run a fresh packet capture merely to verify publication.
+`summarize_present.py` rejects invalid timestamps and identifies the analyzed
+CSV snapshot; missing ETW rows are coverage gaps, not inferred stalls.
+`summarize_transport.py` expects the tested Traditional Chinese UTF-16 PktMon
+format, a selected NIC component, and explicit local UTC offset. Correlation is
+approximate; tunnel arrivals do not establish media loss or NR/120-FPS quality.
+Keep route identities, raw traces, clocks and summaries local.
 
 Native runs require Windows interactive session 1. SSH session 0 has a different
 display/adapter view and fails NGX initialization on this host. Use the on-demand

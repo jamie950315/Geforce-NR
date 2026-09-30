@@ -711,3 +711,54 @@ This limited sample is not a multi-game or long-sequence guarantee. NR-only is
 the mask-free default; no adaptive HUD mode is deployed. Manual custom masks
 are optional. A source session that ended due to
 inactivity produced no pairs and is explicitly excluded from evidence.
+
+## Transport stall diagnostics
+
+The source helpers below investigate GeForce NOW stalls separately from NR image
+quality. They are manual diagnostics and do not change daily processing, video
+settings, or the selected exit-node route.
+
+| Helper | Purpose |
+|---|---|
+| `inspect_stall_network.ps1` | Read Tailscale route metadata, adapter errors/discards, and running GFN process statistics |
+| `capture_transport_stall.ps1` | Record a bounded 90-second peer UDP packet-prefix trace and GFN PresentMon events |
+| `summarize_present.py` | Analyze one explicit PID and one swap chain; flag missing ETW rows separately from observed Present gaps |
+| `summarize_transport.py` | Compare selected NIC RX arrivals with Present gaps using approximate UTC/QPC alignment |
+| `test_summarize_present.py` | Test gap/coverage handling, invalid timestamps, and evidence snapshot identity |
+
+On Windows, the capture helper requires Administrator privileges, `pktmon.exe`,
+`logman.exe`, and a separately supplied `PresentMon-2.5.1-x64.exe` beside the
+script. GeForce NOW must be running. Inspect the current route first and supply
+the actual peer address and UDP port; a client VPN label does not identify them.
+Run names contain only lowercase letters, digits, and hyphens. Existing run
+directories, packet-monitor sessions, and packet filters cause capture to stop
+before creating a new session. Normal cleanup stops the capture it started and
+removes its filter; a forced process/host termination can still leave a session
+requiring manual inspection.
+
+```powershell
+.\inspect_stall_network.ps1
+# Replace the explicit placeholders with the inspected peer address and port.
+.\capture_transport_stall.ps1 -ExitAddress <peer-address> -ExitPort <peer-port> -Name transport-check
+python summarize_present.py runs/transport-check/presents.csv --pid <gfn-pid> --output runs/transport-check/present-summary.json
+python summarize_transport.py runs/transport-check --component <nic-component-id> --utc-offset-hours <trace-local-offset>
+```
+
+The offline Python analyzers use only the standard library. PresentMon v1
+`QPCTime` is interpreted in seconds, cross-checked against `msBetweenPresents`.
+Non-finite/negative times, duplicate QPC timestamps, and multiple swap chains
+are rejected. Completed ETW rows can arrive out of order and are sorted before
+analysis; the CSV hash identifies the bytes actually analyzed. Missing-row
+coverage is not converted into a stall count, and incomplete coverage blocks
+transport correlation.
+
+The packet parser supports the tested UTF-16 `pktmon etl2txt --timestamp --brief`
+Traditional Chinese RX/component format. Other output formats require review;
+it does not silently reinterpret them. Specify the NIC component ID from the
+trace and the UTC offset used by its local timestamps. The capture stores the
+first 64 bytes per packet, which can include an encrypted payload prefix; the
+analyzer reads timestamps, direction, endpoint, and original packet length only.
+Tunnel traffic can include applications other than GFN. Arrival statistics do
+not prove zero media loss, decoder health, NR quality, or 120 FPS acceptance.
+Route inspection output can expose network identities. Keep all output, clock
+records, packet traces, and CSV/JSON summaries in ignored `runs/` or `evidence/`.
