@@ -486,6 +486,32 @@ class CloseRecoveryTests(unittest.TestCase):
         self.assertEqual(app.target_var.get(), 'new')
         self.assertEqual(len(mask_refreshes), 1)
 
+    def test_processing_presets_1080_and_1440(self):
+        from daily_ui import PROCESSING_PRESETS
+        app = DailyApp.__new__(DailyApp)
+        for name in ('mode', 'mask_enabled', 'mask_profile', 'hdr', 'hdr_mapping', 'hdr_queued',
+                     'hold_identical_frames', 'nr_height', 'flow_width', 'flow_grid', 'flow_preset'):
+            setattr(app, name + '_var', Variable())
+        app.status_detail_var = Variable()
+        saved_settings = []
+        app._apply_appearance_to_form = Mock()
+        app._appearance_from_form = Mock(return_value={'preset': 'clean'})
+        app._refresh_mask_status = Mock()
+        app.controller = SimpleNamespace(
+            save_settings=lambda s: saved_settings.append(s),
+            save_appearance=Mock(),
+        )
+        app.restore_recommended()
+        self.assertEqual(app._settings_from_form(), PROCESSING_PRESETS['1080'])
+        self.assertEqual(saved_settings[-1]['nr_height'], 1080)
+        self.assertTrue(saved_settings[-1]['hdr'])
+        self.assertTrue(saved_settings[-1]['hdr_queued'])
+        app.apply_preset_1440()
+        self.assertEqual(app._settings_from_form(), PROCESSING_PRESETS['1440'])
+        self.assertEqual(saved_settings[-1]['nr_height'], 1440)
+        self.assertTrue(saved_settings[-1]['hdr'])
+        self.assertTrue(saved_settings[-1]['hdr_queued'])
+
 
 if __name__ == '__main__':
     unittest.main()
