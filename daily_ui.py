@@ -27,8 +27,8 @@ POLL_INTERVAL_MS = 500
 MUTEX_NAME = r"Local\GFNHUDGuardDailyUI"
 
 RECOMMENDED_SETTINGS: dict[str, Any] = {
-    "nr_height": 900,
-    "flow_width": 320,
+    "nr_height": 1080,
+    "flow_width": 1280,
     "flow_grid": 2,
     "flow_preset": "fast",
     "mode": "nr",
@@ -680,8 +680,8 @@ class DailyApp:
         self.hold_identical_frames_var.set(settings.get('hold_identical_frames',False))
         self.mask_profile_var.set(next(label for label, value in MASK_LABELS.items()
                                       if value == settings.get('mask_profile', 'custom')))
-        self.nr_height_var.set(settings.get("nr_height", 900))
-        self.flow_width_var.set(settings.get("flow_width", 320))
+        self.nr_height_var.set(settings.get("nr_height", 1080))
+        self.flow_width_var.set(settings.get("flow_width", 1280))
         self.flow_grid_var.set(settings.get("flow_grid", 2))
         self.flow_preset_var.set(settings.get("flow_preset", "fast"))
 
@@ -800,7 +800,7 @@ class DailyApp:
         try:
             self.controller.save_settings(dict(RECOMMENDED_SETTINGS))
             self.controller.save_appearance(self._appearance_from_form())
-            self.status_detail_var.set("Recommended NR900, flow height 180, G2 Fast, Clean appearance, mask off, SDR saved.")
+            self.status_detail_var.set("Recommended NR1080, flow height 720, G2 Fast, Clean appearance, mask off, SDR saved.")
             self._refresh_mask_status()
         except Exception as exc:
             _write_error_log("Failed to restore recommended settings")

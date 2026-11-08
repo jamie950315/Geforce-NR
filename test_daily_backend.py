@@ -224,7 +224,7 @@ class DailyTests(unittest.TestCase):
                 self.assertEqual('--queued-hdr' in args, queued)
                 self.assertEqual('--capture-queued-hdr' in args, queued)
                 self.assertEqual(c.settings['hdr_queued'], queued)
-                self.assertEqual(args[args.index('--height')+1], '900')
+                self.assertEqual(args[args.index('--height')+1], '1080')
                 self.assertEqual(args[args.index('--fps')+1], '120')
                 self.assertEqual(args[args.index('--appearance-preset')+1], 'inherited')
 
@@ -330,8 +330,8 @@ class DailyTests(unittest.TestCase):
                 validated(dict(DEFAULTS, **change))
 
     def test_nr1440_preference_roundtrip_preserves_default(self):
-        self.assertEqual(DEFAULTS['nr_height'],900)
-        self.assertEqual(DEFAULTS['flow_width'],320)
+        self.assertEqual(DEFAULTS['nr_height'],1080)
+        self.assertEqual(DEFAULTS['flow_width'],1280)
         settings=dict(DEFAULTS,nr_height=1440)
         self.assertEqual(validated(settings),settings)
         self.assertEqual(migrate_settings(settings),settings)
