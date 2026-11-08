@@ -216,7 +216,8 @@ def supervise(root, folder):
         native.configure_ls(preflight, folder, lambda value: save('ls_config', value))
         check_cancel()
         status('starting', f'Starting NR1080 ({appearance_label}) and hardware optical flow at 60 source FPS...')
-        preset = dict(DEFAULTS, nr_height=1080, hdr=True, hdr_mapping='color-preserving', hdr_queued=True,
+        preset = dict(DEFAULTS, nr_height=1080, flow_width=1280, flow_grid=2, flow_preset='fast',
+                      hdr=True, hdr_mapping='color-preserving', hdr_queued=True,
                       hold_identical_frames=hold_identical_frames)
         controller.start(target, preset, persist=False, fps=60,
                          panel_owner=(request['owner_pid'], request['owner_created']), appearance_config=appearance)

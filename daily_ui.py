@@ -418,7 +418,7 @@ class DailyApp:
             command=self.start_chiaki_chain)
         self.chain_button.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(6, 0))
         self.ttk.Label(controls, style='Muted.TLabel', wraplength=730, justify='left',
-            text='NR1080 → LS1 1440p → LSFG 2x · fixes DPI. Uses the selected NR appearance; processing preset stays separate.').grid(
+            text='NR1080 (flow 720 / G2 Fast) → LS1 1440p → LSFG 2x · fixes DPI. Uses the selected NR appearance; processing preset stays separate.').grid(
                 row=6, column=0, columnspan=3, sticky='ew', pady=(4, 0))
 
         self.body_notebook = self.ttk.Notebook(outer)
