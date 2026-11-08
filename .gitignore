@@ -17,6 +17,8 @@ daily-probe.png
 /.env.*
 /runs/
 /native-*/
+/runtime-*/
+/runtime-*.json
 /.venv/
 /active.json
 /chiaki-chain-active.json

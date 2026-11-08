@@ -15,7 +15,7 @@ LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
 sys.path.insert(0, str(LIVE))
 from live_hud import verify, LAB, STABLE, NATIVE, load, digest
 from gfn_core.config import Appearance, Settings as CoreSettings, atomic_json
-from processing_support import NR_HEIGHTS, settings_type, load_engine
+from processing_support import NR_HEIGHTS, NR_MODEL_PRESETS, settings_type, load_engine, verify_nr_runtime_310_9_16
 from gfn_core.windows import Win32
 
 Settings = settings_type(CoreSettings)
@@ -114,6 +114,8 @@ def main():
     ap.add_argument('--flow-width', type=int, choices=[320, 640, 960, 1280], default=1280)
     ap.add_argument('--flow-grid', type=int, choices=[2, 4], default=2)
     ap.add_argument('--flow-preset', choices=['fast', 'medium', 'slow'], default='fast')
+    ap.add_argument('--nr-runtime', choices=['auto', '310.9.16', '310.8'], default='auto')
+    ap.add_argument('--nr-model-preset', type=int, choices=NR_MODEL_PRESETS, default=2)
     ap.add_argument('--mask', type=Path)
     ap.add_argument('--probe-worker', action='store_true')
     ap.add_argument('--fixed-worker', action='store_true')
@@ -196,6 +198,20 @@ def main():
         if digest(native/'nvngx.dll') != build['worker_sha256'] or digest(native/'nvngx_dlssnr.dll') != integrity['runtime_sha256']:
             raise RuntimeError('Diagnostic binary integrity mismatch')
         integrity = dict(integrity, worker=str(native/'nvngx.dll'), worker_sha256=build['worker_sha256'], diagnostic=kind != 'repaired', timing_repaired=kind == 'repaired')
+    os.environ.pop('GFN_NR_RUNTIME_DLL', None)
+    os.environ.pop('GFN_NR_MODEL_PRESET', None)
+    nr_runtime_info = dict(version='310.8.SF.0', runtime=str(native/'nvngx_dlssnr.dll'),
+                           runtime_sha256=integrity.get('runtime_sha256'), preset=0)
+    use_310_9_16 = (a.nr_runtime == '310.9.16' or
+                    (a.nr_runtime == 'auto' and not a.original_worker and (ROOT / 'runtime-310.9.16.json').exists()))
+    if use_310_9_16:
+        runtime_dll, nr_runtime_info = verify_nr_runtime_310_9_16(ROOT, preset=a.nr_model_preset)
+        os.environ['GFN_NR_RUNTIME_DLL'] = str(runtime_dll)
+        os.environ['GFN_NR_MODEL_PRESET'] = str(a.nr_model_preset)
+        integrity = dict(integrity, active_runtime=str(runtime_dll),
+                         active_runtime_sha256=nr_runtime_info['runtime_sha256'],
+                         active_runtime_version=nr_runtime_info['version'],
+                         active_runtime_preset=nr_runtime_info['preset'])
     win = Win32()
     launcher_mutex = win.mutex('Local\\Jamie_GFN_HUD_Guard_Launcher')
     for root in (ROOT, LIVE, LAB, STABLE):
@@ -265,6 +281,7 @@ def main():
     atomic_json(run / 'manifest.json', dict(target=target.to_dict(), settings=settings.to_dict(),
                 mode=a.mode, mask=mask, daily=a.daily, hdr=a.hdr, hdr_display=hdr_display,
                 appearance_preset=a.appearance_preset,
+                nr_runtime=nr_runtime_info,
                 hdr_proof=a.hdr_proof, timing_evidence=not a.hdr_proof, hdr_mapping=a.hdr_mapping,
                 hdr_queued=a.queued_hdr, hdr_capture_queued=a.capture_queued_hdr,
                 hdr_motion_repaired=a.capture_queued_hdr,

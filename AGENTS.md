@@ -72,6 +72,15 @@ geometry remains authoritative for non-16:9 sources; no preference migration.
 calculation without editing Core/Lab. The engine is loaded into a private module
 with the extended settings/size globals; the original engine module stays unchanged.
 All other settings validation and the 7680 MiB NR1440 admission budget remain.
+It also attests the isolated `runtime-310.9.16/nvngx_dlssnr.dll` (`310.9.16.0`,
+SHA256 `cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed`,
+276,162,560 bytes, carrying Model A / Preset 1 and the faster FP8 Model B /
+Preset 2) and forwards `NS_NR_DLL` + `NS_NR_PRESET=2` to the worker when
+`runtime-310.9.16.json` is present, while preserving every existing `310.8.SF.0`
+binary in Core, Lab, Guard, and `native-*`. Controlled RTX 4070 SUPER replay
+with `310.9.16.0` Preset 2 cut GPU `eval` time by ~41-45% (NR720: 4.0 -> 2.3 ms;
+NR900: 5.3 -> 2.9 ms SDR / 3.1 ms HDRQ; NR1080: 6.7 -> 4.0 ms SDR / 6.9 -> 4.0 ms
+HDRQ at 120.0 FPS; NR1440: 10.9 -> 6.1 ms SDR at 111.5 FPS).
 At 2560x1440 source, NR1440 processes the full frame. Its 45-second HDR replay
 measured 71.90 fresh FPS, not 120. Smaller windows are not upscaled to this budget.
 Do not present offline warp error as live perceptual quality or promote a new

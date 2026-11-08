@@ -9,7 +9,8 @@ from types import ModuleType
 import unittest
 from unittest.mock import patch
 
-from processing_support import NR_HEIGHTS, load_engine, settings_type, work_size
+from processing_support import (NR_HEIGHTS, NR_RUNTIME_310_9_16_SHA256, NR_RUNTIME_310_9_16_SIZE,
+                                load_engine, settings_type, verify_nr_runtime_310_9_16, work_size)
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,34 @@ class Engine:
                     load_engine(settings_type(CoreSettingsFixture))
             self.assertEqual(path.read_text(),source)
             self.assertEqual([p.name for p in Path(folder).iterdir()],['engine.py'])
+
+    def test_loader_forwards_runtime_310_9_16_env_only_when_requested(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'engine.py'
+            source='''from gfn_core.transport import Transport
+class Engine:
+    def launch(self, env):
+        return Transport(['nvngx.dll'], '.', env, None)
+'''
+            path.write_text(source)
+            package=ModuleType('gfn_core');package.__path__=[folder]
+            transport=ModuleType('gfn_core.transport')
+            transport.Transport=lambda cmd,cwd,env,log: dict(env)
+            original=ModuleType('gfn_core.engine')
+            original.__spec__=importlib.util.spec_from_file_location('gfn_core.engine',path)
+            Settings=settings_type(CoreSettingsFixture)
+            with patch.dict(sys.modules,{'gfn_core':package,'gfn_core.transport':transport,'gfn_core.engine':original}):
+                sys.modules.pop('gfn_core.daily_engine',None)
+                Engine=load_engine(Settings)
+                with patch.dict('os.environ',{},clear=False):
+                    sys.modules['os'].environ.pop('GFN_NR_RUNTIME_DLL',None)
+                    self.assertEqual(Engine().launch({'A':'1'}),{'A':'1'})
+                with patch.dict('os.environ',{'GFN_NR_RUNTIME_DLL':'C:/runtime/nvngx_dlssnr.dll','GFN_NR_MODEL_PRESET':'2'},clear=False):
+                    self.assertEqual(Engine().launch({'A':'1'}),{'A':'1','NS_NR_DLL':'C:/runtime/nvngx_dlssnr.dll','NS_NR_PRESET':'2'})
+            with self.assertRaises(ValueError):
+                verify_nr_runtime_310_9_16(folder, preset=3)
+            with self.assertRaises(RuntimeError):
+                verify_nr_runtime_310_9_16(folder, preset=2)
 
     @unittest.skipUnless(sys.platform=='win32','Actual Core dependency check is Windows-only')
     def test_installed_core_settings_when_available(self):

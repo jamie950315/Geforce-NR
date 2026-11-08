@@ -1,11 +1,45 @@
-"""Daily-launcher resolution extensions without modifying the installed Core."""
+"""Daily-launcher resolution and verified 310.9.16 runtime extensions without modifying the installed Core."""
 from dataclasses import dataclass, is_dataclass, replace
+import hashlib
 import importlib.util
+import json
+import os
+from pathlib import Path
 import sys
 
 
 NR_HEIGHTS = (720, 900, 1080, 1440)
 _WORK_BUDGETS = (540, *NR_HEIGHTS)
+NR_RUNTIME_310_9_16_SHA256 = 'cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed'
+NR_RUNTIME_310_9_16_SIZE = 276162560
+NR_MODEL_PRESETS = (0, 1, 2)
+
+
+def verify_nr_runtime_310_9_16(root, preset=2):
+    """Attest the isolated 310.9.16 neural runtime without replacing 310.8.SF.0 worker copies."""
+    if type(preset) is not int or preset not in NR_MODEL_PRESETS:
+        raise ValueError('NR model preset must be 0 (auto), 1 (original), or 2 (optimized)')
+    root = Path(root)
+    record_path = root / 'runtime-310.9.16.json'
+    dll_path = root / 'runtime-310.9.16' / 'nvngx_dlssnr.dll'
+    try:
+        record = json.loads(record_path.read_text(encoding='utf-8-sig'))
+        if (record.get('version') != '310.9.16.0'
+                or record.get('runtime_sha256') != NR_RUNTIME_310_9_16_SHA256
+                or record.get('size') != NR_RUNTIME_310_9_16_SIZE):
+            raise RuntimeError('NR 310.9.16 runtime record mismatch')
+        if dll_path.stat().st_size != NR_RUNTIME_310_9_16_SIZE:
+            raise RuntimeError('NR 310.9.16 runtime size mismatch')
+        with dll_path.open('rb') as handle:
+            actual = hashlib.file_digest(handle, 'sha256').hexdigest()
+        if actual != NR_RUNTIME_310_9_16_SHA256:
+            raise RuntimeError('NR 310.9.16 runtime SHA256 mismatch')
+    except (OSError, ValueError, KeyError) as exc:
+        raise RuntimeError('Verified NR 310.9.16 runtime is unavailable; stage runtime-310.9.16 first.') from exc
+    return dll_path, dict(version='310.9.16.0', runtime=str(dll_path),
+                          runtime_sha256=NR_RUNTIME_310_9_16_SHA256,
+                          size=NR_RUNTIME_310_9_16_SIZE, preset=preset)
+
 
 
 def settings_type(base):
@@ -61,6 +95,16 @@ def load_engine(Settings):
         # Compiling the returned source avoids creating/replacing Core's .pyc.
         # Imports and relative package resolution still use the original spec.
         exec(compile(source, original.origin, 'exec'), module.__dict__)
+        orig_transport = getattr(module, 'Transport', None)
+        if orig_transport is not None:
+            def daily_transport(cmd, cwd, env, log, _orig=orig_transport):
+                runtime_dll = os.environ.get('GFN_NR_RUNTIME_DLL')
+                if runtime_dll:
+                    env = dict(env)
+                    env['NS_NR_DLL'] = runtime_dll
+                    env['NS_NR_PRESET'] = os.environ.get('GFN_NR_MODEL_PRESET', '2')
+                return _orig(cmd, cwd, env, log)
+            module.Transport = daily_transport
         module.Settings = Settings
         module.work_size = work_size
         module._daily_processing_extension = True
