@@ -317,10 +317,27 @@ class DailyController:
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         self.state, self.detail = 'starting', 'Verifying the mainline build and initializing the GPU...'
         try:
-            self.win.u.SetForegroundWindow.argtypes = [wintypes.HWND]
-            self.win.u.SetForegroundWindow.restype = wintypes.BOOL
-            if not self.win.u.SetForegroundWindow(current['hwnd']):
-                raise RuntimeError('Windows declined foreground activation')
+            u = self.win.u
+            attached = False
+            cur_thread = fg_thread = 0
+            if hasattr(u, 'IsGUIThread') and hasattr(u, 'AttachThreadInput') and hasattr(self.win, 'k'):
+                u.IsGUIThread(True)
+                fg = u.GetForegroundWindow()
+                if fg and fg != current['hwnd']:
+                    cur_thread = self.win.k.GetCurrentThreadId()
+                    fg_thread = u.GetWindowThreadProcessId(fg, None)
+                    if cur_thread and fg_thread and cur_thread != fg_thread:
+                        attached = bool(u.AttachThreadInput(cur_thread, fg_thread, True))
+                if hasattr(u, 'BringWindowToTop'):
+                    u.BringWindowToTop(current['hwnd'])
+            try:
+                u.SetForegroundWindow.argtypes = [wintypes.HWND]
+                u.SetForegroundWindow.restype = wintypes.BOOL
+                if not u.SetForegroundWindow(current['hwnd']):
+                    raise RuntimeError('Windows declined foreground activation')
+            finally:
+                if attached:
+                    u.AttachThreadInput(cur_thread, fg_thread, False)
         except Exception:
             self.detail += ' Switch to the application window to resume processing.'
 

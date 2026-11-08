@@ -84,10 +84,19 @@ def configured_ls_settings(data):
 
 
 def xml_semantics(data):
-    """Ignore serializer formatting, never ignore user settings or profiles."""
+    """Ignore serializer formatting and sub-DIP WPF window rounding, never user settings or profiles."""
+    def normalize_text(tag, text):
+        value = (text or '').strip()
+        if tag in {'WindowWidth', 'WindowHeight', 'WindowLeft', 'WindowTop'}:
+            try:
+                return str(round(float(value)))
+            except ValueError:
+                return value
+        return value
+
     def node(element):
         return (element.tag, tuple(sorted(element.attrib.items())),
-                (element.text or '').strip(), tuple(node(child) for child in element))
+                normalize_text(element.tag, element.text), tuple(node(child) for child in element))
     return node(ET.fromstring(data))
 
 
@@ -441,10 +450,13 @@ class NativeChain:
     def focus(self, record):
         self.require_window(record)
         hwnd = record['hwnd']
+        if hasattr(self.gui, 'PumpWaitingMessages'):
+            self.gui.PumpWaitingMessages()
         thread = self.api.GetCurrentThreadId()
         foreground = self.gui.GetForegroundWindow()
         foreground_thread = self.process.GetWindowThreadProcessId(foreground)[0] if foreground else thread
-        attached = thread != foreground_thread and self.u.AttachThreadInput(thread, foreground_thread, True)
+        attached = bool(foreground and thread != foreground_thread
+                        and self.u.AttachThreadInput(thread, foreground_thread, True))
         try:
             self.gui.BringWindowToTop(hwnd)
             self.gui.SetForegroundWindow(hwnd)

@@ -120,6 +120,8 @@ class ConfigTests(unittest.TestCase):
         self.assertNotEqual(configured, roundtrip)
         self.assertEqual(restore_ls_bytes(roundtrip, original, configured), original)
         self.assertEqual(restore_ls_bytes(original, original, configured), original)
+        dpi_jitter = edit_xml(configured, 'WindowWidth', '800.2')
+        self.assertEqual(restore_ls_bytes(dpi_jitter, original, configured), original)
 
     def test_foreign_change_is_never_overwritten(self):
         original = settings_xml()

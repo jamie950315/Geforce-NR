@@ -87,6 +87,8 @@ class ChainController:
             self.process = subprocess.Popen([str(python), str(self.root/'chain_controller.py'),
                 '--job', str(self.job)], cwd=self.root, stdout=log, stderr=log,
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if hasattr(self.win, 'u') and hasattr(self.win.u, 'AllowSetForegroundWindow'):
+            self.win.u.AllowSetForegroundWindow(self.process.pid)
 
     def stop(self):
         if self.busy:
@@ -193,7 +195,7 @@ def supervise(root, folder):
         if nr_enabled:
             return bool(snapshot.get('nr_confirmed') and snapshot.get('hardware_flow_active'))
         return bool(snapshot.get('state') == 'running' and not controller.metrics.get('suspended')
-                    and controller.metrics.get('renderer_pid') and controller.metrics.get('presented_frames', 0) > 0)
+                    and controller.metrics.get('renderer_pid'))
 
     def cancelled():
         if not alive(win, request.get('owner_pid'), request.get('owner_created')):
