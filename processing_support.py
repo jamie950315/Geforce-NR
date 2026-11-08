@@ -10,6 +10,7 @@ import sys
 
 NR_HEIGHTS = (720, 900, 1080, 1440)
 _WORK_BUDGETS = (540, *NR_HEIGHTS)
+FLOW_WIDTHS = (320, 640, 960, 1280, 1600, 1920)
 NR_RUNTIME_310_9_16_SHA256 = 'cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed'
 NR_RUNTIME_310_9_16_SIZE = 276162560
 NR_MODEL_PRESETS = (0, 1, 2)
@@ -43,17 +44,23 @@ def verify_nr_runtime_310_9_16(root, preset=2):
 
 
 def settings_type(base):
-    """Retain every Core validation rule while admitting the 1440p NR budget."""
+    """Retain every Core validation rule while admitting 1440p NR and 900p/1080p flow budgets."""
     if not is_dataclass(base) or not base.__dataclass_params__.frozen:
         raise TypeError('Core Settings must be a frozen dataclass')
 
     @dataclass(frozen=True)
     class DailySettings(base):
         def __post_init__(self):
+            overrides = {}
             if type(self.nr_height) is int and self.nr_height == 1440:
+                overrides['nr_height'] = 1080
+            flow_w = getattr(self, 'flow_width', None)
+            if type(flow_w) is int and flow_w in (1600, 1920):
+                overrides['flow_width'] = 1280
+            if overrides:
                 # A separate validation-only value exercises Core's entire
-                # contract. The actual immutable settings retain NR1440.
-                replace(self, nr_height=1080)
+                # contract. The actual immutable settings retain the extended values.
+                replace(self, **overrides)
             else:
                 base.__post_init__(self)
 
@@ -71,13 +78,25 @@ def work_size(width, height, budget):
     return max(64, int(width * scale) // 2 * 2), max(64, int(height * scale) // 2 * 2)
 
 
+def flow_size(width, height, input_width):
+    """Core's even-size, aspect-preserving flow rule with 900p and 1080p budgets."""
+    if (type(width) is not int or type(height) is not int
+            or not 64 <= width <= 7680 or not 64 <= height <= 4320):
+        raise ValueError('Unsupported source dimensions')
+    if type(input_width) is not int or input_width not in FLOW_WIDTHS:
+        raise ValueError('Unsupported flow input width')
+    scale = min(1.0, input_width / width, (input_width * 9 / 16) / height)
+    return max(128, int(width * scale) // 2 * 2), max(128, int(height * scale) // 2 * 2)
+
+
 def load_engine(Settings):
     """Execute the unchanged Core source in a separate daily-only namespace."""
     name = 'gfn_core.daily_engine'
     existing = sys.modules.get(name)
     if existing is not None:
         if (getattr(existing, '_daily_processing_extension', False)
-                and existing.Settings is Settings and existing.work_size is work_size):
+                and existing.Settings is Settings and existing.work_size is work_size
+                and getattr(existing, 'flow_size', flow_size) is flow_size):
             return existing.Engine
         raise RuntimeError('The daily engine namespace is already owned by another configuration')
     original = importlib.util.find_spec('gfn_core.engine')
@@ -107,6 +126,7 @@ def load_engine(Settings):
             module.Transport = daily_transport
         module.Settings = Settings
         module.work_size = work_size
+        module.flow_size = flow_size
         module._daily_processing_extension = True
         return module.Engine
     except BaseException:

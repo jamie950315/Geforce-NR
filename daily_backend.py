@@ -9,13 +9,13 @@ import sys
 import time
 import uuid
 from application_windows import enumerate_application_windows
-from processing_support import NR_HEIGHTS
+from processing_support import FLOW_WIDTHS, NR_HEIGHTS
 from appearance_presets import (APPEARANCE_PRESETS, appearance_cli_args, preset_config,
                                 strict_json_loads, validate_appearance_config)
 from shared_json import read_json
 
 DEFAULTS = dict(nr_height=1080, flow_width=1280, flow_grid=2, flow_preset='fast', mode='nr', mask_profile='custom', hdr=False, hdr_mapping='color-preserving', hdr_queued=False, hold_identical_frames=False)
-CHOICES = dict(nr_height=NR_HEIGHTS, flow_width=(320, 640, 960, 1280),
+CHOICES = dict(nr_height=NR_HEIGHTS, flow_width=FLOW_WIDTHS,
                flow_grid=(2, 4), flow_preset=('fast', 'medium', 'slow'), mode=('guard', 'nr', 'bypass'),
                mask_profile=('custom', 'cyberpunk'), hdr=(False, True), hdr_mapping=('legacy','color-preserving'), hdr_queued=(False, True), hold_identical_frames=(False,True))
 

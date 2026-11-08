@@ -64,10 +64,10 @@ launcher. Resolution tuning exposes NR 720/900/1080/1440 and explicit flow
 width/grid/preset overrides. Five 60-second live samples support this 120-oriented
 configuration; NR900/1080 local processing p95 is 8.88/10.48 ms. G2 Medium at NR720
 is 7.83 ms versus Fast 7.07 ms. All output 2560x1440 via residual composition.
-The flow-width1280 limit is a software allow-list, not a measured hardware cap.
-The panel displays Optical flow height (16:9): 180/360/540/720, retaining stored
-width values 320/640/960/1280 and the existing CLI/processing contract. Actual
-geometry remains authoritative for non-16:9 sources; no preference migration.
+The panel displays Optical flow height (16:9): 180/360/540/720/900/1080, retaining
+stored width values 320/640/960/1280/1600/1920 and exposing Fast (1080 @ 120 FPS:
+NR1080 + flow720/G2/Fast HDRQ) and Quality (1440 @ 60 FPS: NR1440 + flow1080/G2/Medium
+HDRQ) presets. Actual geometry remains authoritative for non-16:9 sources.
 `processing_support.py` extends the isolated launcher's NR1440 settings and size
 calculation without editing Core/Lab. The engine is loaded into a private module
 with the extended settings/size globals; the original engine module stays unchanged.

@@ -15,7 +15,7 @@ LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
 sys.path.insert(0, str(LIVE))
 from live_hud import verify, LAB, STABLE, NATIVE, load, digest
 from gfn_core.config import Appearance, Settings as CoreSettings, atomic_json
-from processing_support import NR_HEIGHTS, NR_MODEL_PRESETS, settings_type, load_engine, verify_nr_runtime_310_9_16
+from processing_support import FLOW_WIDTHS, NR_HEIGHTS, NR_MODEL_PRESETS, settings_type, load_engine, verify_nr_runtime_310_9_16
 from gfn_core.windows import Win32
 
 Settings = settings_type(CoreSettings)
@@ -111,7 +111,7 @@ def main():
     ap.add_argument('--appearance-preset', choices=APPEARANCE_PRESETS, default='inherited')
     ap.add_argument('--appearance-json', help='Exact six-field JSON values; requires the custom appearance preset')
     ap.add_argument('--height', type=int, choices=NR_HEIGHTS, default=1080)
-    ap.add_argument('--flow-width', type=int, choices=[320, 640, 960, 1280], default=1280)
+    ap.add_argument('--flow-width', type=int, choices=FLOW_WIDTHS, default=1280)
     ap.add_argument('--flow-grid', type=int, choices=[2, 4], default=2)
     ap.add_argument('--flow-preset', choices=['fast', 'medium', 'slow'], default='fast')
     ap.add_argument('--nr-runtime', choices=['auto', '310.9.16', '310.8'], default='auto')
@@ -190,6 +190,8 @@ def main():
             kind = 'live-pair' if a.live_pair_worker else ('fixed' if a.fixed_worker else ('probe' if a.probe_worker else 'repaired'))
             if a.hold_identical_frames:
                 kind = 'static-stable'
+            elif a.flow_width > 1280 and kind == 'repaired':
+                kind = 'hdr-color-motion-repaired'
         native = ROOT / ('native-' + kind)
         build = load(ROOT / (kind + '-build.json'))
         if a.hold_identical_frames:

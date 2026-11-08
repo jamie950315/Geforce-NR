@@ -269,7 +269,7 @@ class CloseRecoveryTests(unittest.TestCase):
         app._radio_row(None, 4, variable, tuple(FLOW_HEIGHT_LABELS), labels=FLOW_HEIGHT_LABELS)
         calls = app.ttk.Radiobutton.call_args_list
         self.assertEqual([(c.kwargs['text'], c.kwargs['value']) for c in calls],
-                         [('180',320),('360',640),('540',960),('720',1280)])
+                         [('180',320),('360',640),('540',960),('720',1280),('900',1600),('1080',1920)])
         self.assertTrue(all(c.kwargs['variable'] is variable for c in calls))
 
     def test_hdr_preference_round_trip_and_legacy_default(self):
@@ -502,13 +502,17 @@ class CloseRecoveryTests(unittest.TestCase):
             save_appearance=Mock(),
         )
         app.restore_recommended()
-        self.assertEqual(app._settings_from_form(), PROCESSING_PRESETS['1080'])
+        self.assertEqual(app._settings_from_form(), PROCESSING_PRESETS['fast'])
         self.assertEqual(saved_settings[-1]['nr_height'], 1080)
+        self.assertEqual(saved_settings[-1]['flow_width'], 1280)
+        self.assertEqual(saved_settings[-1]['flow_preset'], 'fast')
         self.assertTrue(saved_settings[-1]['hdr'])
         self.assertTrue(saved_settings[-1]['hdr_queued'])
         app.apply_preset_1440()
-        self.assertEqual(app._settings_from_form(), PROCESSING_PRESETS['1440'])
+        self.assertEqual(app._settings_from_form(), PROCESSING_PRESETS['quality'])
         self.assertEqual(saved_settings[-1]['nr_height'], 1440)
+        self.assertEqual(saved_settings[-1]['flow_width'], 1920)
+        self.assertEqual(saved_settings[-1]['flow_preset'], 'medium')
         self.assertTrue(saved_settings[-1]['hdr'])
         self.assertTrue(saved_settings[-1]['hdr_queued'])
 

@@ -40,21 +40,29 @@ RECOMMENDED_SETTINGS: dict[str, Any] = {
 }
 
 PROCESSING_PRESETS: dict[str, dict[str, Any]] = {
-    "1080": {
+    "fast": {
         **RECOMMENDED_SETTINGS,
         "nr_height": 1080,
+        "flow_width": 1280,
+        "flow_grid": 2,
+        "flow_preset": "fast",
         "hdr": True,
         "hdr_mapping": "color-preserving",
         "hdr_queued": True,
     },
-    "1440": {
+    "quality": {
         **RECOMMENDED_SETTINGS,
         "nr_height": 1440,
+        "flow_width": 1920,
+        "flow_grid": 2,
+        "flow_preset": "medium",
         "hdr": True,
         "hdr_mapping": "color-preserving",
         "hdr_queued": True,
     },
 }
+PROCESSING_PRESETS["1080"] = PROCESSING_PRESETS["fast"]
+PROCESSING_PRESETS["1440"] = PROCESSING_PRESETS["quality"]
 
 MODE_LABELS = {
     "NR — Neural Rendering": "nr",
@@ -64,7 +72,7 @@ MODE_VALUES_TO_LABELS = {value: label for label, value in MODE_LABELS.items()}
 MASK_LABELS = {'Custom regions (selected window)': 'custom', 'Cyberpunk 2077 preset (1440p)': 'cyberpunk'}
 HDR_MAPPING_LABELS = {'Color-preserving': 'color-preserving', 'Legacy': 'legacy'}
 # Display 16:9 height equivalents while retaining the existing width-based ABI.
-FLOW_HEIGHT_LABELS = {320: '180', 640: '360', 960: '540', 1280: '720'}
+FLOW_HEIGHT_LABELS = {320: '180', 640: '360', 960: '540', 1280: '720', 1600: '900', 1920: '1080'}
 
 
 def fit_window_bounds(requested, work_area, decoration=(0, 0)):
@@ -457,10 +465,16 @@ class DailyApp:
         preference_actions.columnconfigure(2, weight=1)
         self.save_button = self.ttk.Button(preference_actions, text="Save preferences", command=self.save_preferences)
         self.save_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        self.restore_button = self.ttk.Button(preference_actions, text="1080", command=self.restore_recommended)
+        self.restore_button = self.ttk.Button(preference_actions, text="Fast", command=self.restore_recommended)
         self.restore_button.grid(row=0, column=1, sticky="ew", padx=4)
-        self.preset_1440_button = self.ttk.Button(preference_actions, text="1440", command=self.apply_preset_1440)
+        self.preset_1440_button = self.ttk.Button(preference_actions, text="Quality", command=self.apply_preset_1440)
         self.preset_1440_button.grid(row=0, column=2, sticky="ew", padx=(4, 0))
+        self.ttk.Label(preference_actions, text="(1080 @ 120 FPS)", style="Muted.TLabel", anchor="center", justify="center").grid(
+            row=1, column=1, sticky="ew", padx=4, pady=(2, 0)
+        )
+        self.ttk.Label(preference_actions, text="(1440 @ 60 FPS)", style="Muted.TLabel", anchor="center", justify="center").grid(
+            row=1, column=2, sticky="ew", padx=(4, 0), pady=(2, 0)
+        )
 
         status = self.ttk.Frame(body, style="Panel.TFrame", padding=12)
         status.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
@@ -815,27 +829,30 @@ class DailyApp:
             self.messagebox.showerror(APP_TITLE, f"Could not save preferences.\n\n{exc}")
 
     def apply_processing_preset(self, name: str) -> None:
-        if name not in PROCESSING_PRESETS:
+        key = name.lower()
+        if key not in PROCESSING_PRESETS:
             raise ValueError(f"Unsupported processing preset: {name}")
-        preset = dict(PROCESSING_PRESETS[name])
+        preset = dict(PROCESSING_PRESETS[key])
+        label = "Fast" if preset["nr_height"] == 1080 else "Quality"
+        flow_h = FLOW_HEIGHT_LABELS.get(preset["flow_width"], str(preset["flow_width"]))
         self._apply_settings_to_form(preset)
         self._apply_appearance_to_form(preset_config('clean'))
         try:
             self.controller.save_settings(dict(preset))
             self.controller.save_appearance(self._appearance_from_form())
             self.status_detail_var.set(
-                f"Preset {name} (NR{preset['nr_height']}, flow height 720, G2 Fast, Clean appearance, mask off, HDR queued) saved."
+                f"Preset {label} (NR{preset['nr_height']}, flow height {flow_h}, G{preset['flow_grid']} {preset['flow_preset'].title()}, Clean appearance, mask off, HDR queued) saved."
             )
             self._refresh_mask_status()
         except Exception as exc:
             _write_error_log("Failed to restore recommended settings")
-            self.messagebox.showerror(APP_TITLE, f"Preset {name} values were applied on screen but could not be saved.\n\n{exc}")
+            self.messagebox.showerror(APP_TITLE, f"Preset {label} values were applied on screen but could not be saved.\n\n{exc}")
 
     def restore_recommended(self) -> None:
-        self.apply_processing_preset("1080")
+        self.apply_processing_preset("fast")
 
     def apply_preset_1440(self) -> None:
-        self.apply_processing_preset("1440")
+        self.apply_processing_preset("quality")
 
     def start(self) -> None:
         target = self.target_by_display.get(self.target_var.get())

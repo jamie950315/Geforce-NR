@@ -9,8 +9,8 @@ from types import ModuleType
 import unittest
 from unittest.mock import patch
 
-from processing_support import (NR_HEIGHTS, NR_RUNTIME_310_9_16_SHA256, NR_RUNTIME_310_9_16_SIZE,
-                                load_engine, settings_type, verify_nr_runtime_310_9_16, work_size)
+from processing_support import (FLOW_WIDTHS, NR_HEIGHTS, NR_RUNTIME_310_9_16_SHA256, NR_RUNTIME_310_9_16_SIZE,
+                                flow_size, load_engine, settings_type, verify_nr_runtime_310_9_16, work_size)
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,9 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual(work_size(641,481,1440),(640,480))
         self.assertEqual(work_size(7680,4320,1440),(2560,1440))
         self.assertEqual(work_size(64,4320,540),(64,540))
+        self.assertEqual(FLOW_WIDTHS,(320,640,960,1280,1600,1920))
+        self.assertEqual(flow_size(2560,1440,1600),(1600,900))
+        self.assertEqual(flow_size(2560,1440,1920),(1920,1080))
 
     def test_geometry_rejects_bool_noninteger_and_out_of_bounds(self):
         for values in ((True,720,720),(1280,False,720),(1280,720,True),
