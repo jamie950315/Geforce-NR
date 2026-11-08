@@ -200,6 +200,9 @@ class CloseRecoveryTests(unittest.TestCase):
         app.controller.start_chiaki_chain.assert_called_once_with(target, appearance_config=preset_config('clean'),hold_identical_frames=False)
         app._settings_from_form.assert_not_called()
         self.assertEqual(app._last_state, 'starting')
+        app.controller.start_chiaki_chain.reset_mock()
+        app.start_chiaki_chain_30()
+        app.controller.start_chiaki_chain.assert_called_once_with(target, appearance_config=preset_config('clean'),hold_identical_frames=False, fps=30)
 
     def test_cold_start_enabled_without_chiaki_but_not_unrelated_selection(self):
         app = DailyApp.__new__(DailyApp)

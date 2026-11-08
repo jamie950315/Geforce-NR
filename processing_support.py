@@ -11,6 +11,7 @@ import sys
 NR_HEIGHTS = (720, 900, 1080, 1440)
 _WORK_BUDGETS = (540, *NR_HEIGHTS)
 FLOW_WIDTHS = (320, 640, 960, 1280, 1600, 1920)
+FPS_CHOICES = (30, 60, 120)
 NR_RUNTIME_310_9_16_SHA256 = 'cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed'
 NR_RUNTIME_310_9_16_SIZE = 276162560
 NR_MODEL_PRESETS = (0, 1, 2)
@@ -57,6 +58,9 @@ def settings_type(base):
             flow_w = getattr(self, 'flow_width', None)
             if type(flow_w) is int and flow_w in (1600, 1920):
                 overrides['flow_width'] = 1280
+            fps_val = getattr(self, 'fps', None)
+            if type(fps_val) is int and fps_val == 30:
+                overrides['fps'] = 60
             if overrides:
                 # A separate validation-only value exercises Core's entire
                 # contract. The actual immutable settings retain the extended values.
@@ -124,6 +128,23 @@ def load_engine(Settings):
                     env['NS_NR_PRESET'] = os.environ.get('GFN_NR_MODEL_PRESET', '2')
                 return _orig(cmd, cwd, env, log)
             module.Transport = daily_transport
+        orig_source_pacer = getattr(module, 'SourcePacer', None)
+        if orig_source_pacer is not None:
+            class DailySourcePacer(orig_source_pacer):
+                def __init__(self, fps, *args, **kwargs):
+                    super().__init__(60 if fps == 30 else fps, *args, **kwargs)
+                    if fps == 30:
+                        self.rate = 30
+                        self.tokens = 1.0
+            module.SourcePacer = DailySourcePacer
+        orig_deadline_pacer = getattr(module, 'DeadlinePacer', None)
+        if orig_deadline_pacer is not None:
+            class DailyDeadlinePacer(orig_deadline_pacer):
+                def __init__(self, fps, *args, **kwargs):
+                    super().__init__(60 if fps == 30 else fps, *args, **kwargs)
+                    if fps == 30:
+                        self.period = 1.0 / 30.0
+            module.DeadlinePacer = DailyDeadlinePacer
         module.Settings = Settings
         module.work_size = work_size
         module.flow_size = flow_size

@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 from application_windows import enumerate_application_windows
-from processing_support import FLOW_WIDTHS, NR_HEIGHTS
+from processing_support import FLOW_WIDTHS, FPS_CHOICES, NR_HEIGHTS
 from appearance_presets import (APPEARANCE_PRESETS, appearance_cli_args, preset_config,
                                 strict_json_loads, validate_appearance_config)
 from shared_json import read_json
@@ -214,9 +214,11 @@ class DailyController:
             raise RuntimeError('The window changed during capture; preview discarded')
         return dict(width=width, height=height, ppm=preview)
 
-    def start_chiaki_chain(self, target=None, appearance_config=None, hold_identical_frames=False):
+    def start_chiaki_chain(self, target=None, appearance_config=None, hold_identical_frames=False, fps=60):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
+        if type(fps) is not int or fps not in (30, 60):
+            raise ValueError('Chiaki chain FPS must be 30 or 60')
         appearance = validate_appearance_config(self.appearance_settings if appearance_config is None else appearance_config)
         current = self._current_target(target) if target is not None else None
         from chain_controller import ChainController
@@ -224,14 +226,17 @@ class DailyController:
         # Retain ownership even if start raises after partially launching, so
         # the panel can still poll cleanup and request an authenticated stop.
         self.chain = chain
-        chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames)
+        if fps == 60:
+            chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames)
+        else:
+            chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames, fps=fps)
 
     def start(self, target, settings, *, persist=True, fps=120, panel_owner=None,
               appearance_preset='inherited', appearance_config=None):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
-        if type(fps) is not int or fps not in (60, 120):
-            raise ValueError('FPS must be 60 or 120')
+        if type(fps) is not int or fps not in FPS_CHOICES:
+            raise ValueError('FPS must be 30, 60, or 120')
         if type(persist) is not bool:
             raise ValueError('Preference persistence must be a boolean')
         appearance = validate_appearance_config(appearance_config) if appearance_config is not None else None

@@ -15,7 +15,7 @@ LIVE = ROOT.parent / 'gfn-hud-live-20260921-7b03'
 sys.path.insert(0, str(LIVE))
 from live_hud import verify, LAB, STABLE, NATIVE, load, digest
 from gfn_core.config import Appearance, Settings as CoreSettings, atomic_json
-from processing_support import FLOW_WIDTHS, NR_HEIGHTS, NR_MODEL_PRESETS, settings_type, load_engine, verify_nr_runtime_310_9_16
+from processing_support import FLOW_WIDTHS, FPS_CHOICES, NR_HEIGHTS, NR_MODEL_PRESETS, settings_type, load_engine, verify_nr_runtime_310_9_16
 from gfn_core.windows import Win32
 
 Settings = settings_type(CoreSettings)
@@ -107,7 +107,7 @@ def main():
     ap.add_argument('--hwnd', type=int, required=True)
     ap.add_argument('--mode', choices=['bypass', 'nr', 'guard'], required=True)
     ap.add_argument('--seconds', type=int, default=60)
-    ap.add_argument('--fps', type=int, choices=[60, 120], default=120)
+    ap.add_argument('--fps', type=int, choices=FPS_CHOICES, default=120)
     ap.add_argument('--appearance-preset', choices=APPEARANCE_PRESETS, default='inherited')
     ap.add_argument('--appearance-json', help='Exact six-field JSON values; requires the custom appearance preset')
     ap.add_argument('--height', type=int, choices=NR_HEIGHTS, default=1080)
@@ -278,7 +278,7 @@ def main():
     appearance = Appearance.from_dict(resolve_appearance(a.appearance_preset, load(LAB / 'appearance.json'), custom_appearance))
     settings = Settings(fps=a.fps, nr_height=a.height, duration=a.seconds,
                         bypass=a.mode == 'bypass', profile_frames=not a.daily,
-                        appearance=appearance, pacing='source', capture_wait_ms=16,
+                        appearance=appearance, pacing='deadline' if a.fps == 30 else 'source', capture_wait_ms=16,
                         flow_width=a.flow_width, flow_grid=a.flow_grid, flow_preset=a.flow_preset)
     atomic_json(run / 'manifest.json', dict(target=target.to_dict(), settings=settings.to_dict(),
                 mode=a.mode, mask=mask, daily=a.daily, hdr=a.hdr, hdr_display=hdr_display,

@@ -172,9 +172,11 @@ class DailyTests(unittest.TestCase):
     def test_launch_rejects_invalid_fps_before_side_effects(self):
         c = DailyController.__new__(DailyController)
         c.process = None
-        for fps in (True, 60.0, 30, 240):
+        for fps in (True, 60.0, 24, 90, 240):
             with self.subTest(fps=fps), self.assertRaisesRegex(ValueError, 'FPS'):
                 c.start({}, DEFAULTS, fps=fps)
+            with self.subTest(chain_fps=fps), self.assertRaisesRegex(ValueError, 'FPS'):
+                c.start_chiaki_chain({}, fps=fps)
         for owner in ((1,), (1, 0), (True, 2), (1, 2, 3), '1,2'):
             with self.subTest(owner=owner), self.assertRaisesRegex(ValueError, 'Panel owner'):
                 c.start({}, DEFAULTS, panel_owner=owner)
