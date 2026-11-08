@@ -420,9 +420,15 @@ class DailyApp:
         self.chain_30_button = self.ttk.Button(controls, text='Play Chiaki 30 FPS + NR + LSFG (30 → 60 FPS)',
             command=self.start_chiaki_chain_30)
         self.chain_30_button.grid(row=5, column=2, sticky='ew', pady=(6, 0))
+        self.chain_lsfg_button = self.ttk.Button(controls, text='Play Chiaki + LSFG (60 → 120 FPS)',
+            command=self.start_chiaki_lsfg)
+        self.chain_lsfg_button.grid(row=6, column=0, columnspan=2, sticky='ew', padx=(0, 10), pady=(6, 0))
+        self.chain_30_lsfg_button = self.ttk.Button(controls, text='Play Chiaki 30 FPS + LSFG (30 → 60 FPS)',
+            command=self.start_chiaki_lsfg_30)
+        self.chain_30_lsfg_button.grid(row=6, column=2, sticky='ew', pady=(6, 0))
         self.ttk.Label(controls, style='Muted.TLabel', wraplength=730, justify='left',
-            text='NR1080 (flow 720 / G2 Fast) → LS1 1440p → LSFG 2x · 30 FPS mode drops duplicate 60 Hz stream frames.').grid(
-                row=6, column=0, columnspan=3, sticky='ew', pady=(4, 0))
+            text='NR1080 (flow 720 / G2 Fast) or Bypass → LS1 1440p → LSFG 2x · 30 FPS modes drop duplicate 60 Hz stream frames.').grid(
+                row=7, column=0, columnspan=3, sticky='ew', pady=(4, 0))
 
         self.body_notebook = self.ttk.Notebook(outer)
         self.body_notebook.grid(row=3, column=0, sticky='nsew')
@@ -887,21 +893,23 @@ class DailyApp:
         installations = {str(PureWindowsPath(target['exe'])).casefold() for target in candidates}
         return candidates[0] if candidates and len(installations) == 1 else None
 
-    def start_chiaki_chain(self, fps: int = 60) -> None:
+    def start_chiaki_chain(self, fps: int = 60, nr: bool = True) -> None:
         target = self._chiaki_target()
         if not self._chiaki_can_start():
             self.messagebox.showwarning(APP_TITLE, 'Select a Chiaki window when multiple installations or an unrelated application are listed.')
             return
         try:
-            if fps == 60:
-                self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form(),
-                    hold_identical_frames=bool(self.hold_identical_frames_var.get()))
-            else:
-                self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form(),
-                    hold_identical_frames=bool(self.hold_identical_frames_var.get()), fps=fps)
+            extra = {}
+            if fps != 60:
+                extra['fps'] = fps
+            if not nr:
+                extra['nr'] = False
+            self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form(),
+                hold_identical_frames=bool(self.hold_identical_frames_var.get()), **extra)
             self._last_state = 'starting'
             self.status_state_var.set('STARTING')
-            self.status_detail_var.set('Preparing Chiaki, physical-pixel sizing, NR and Lossless Scaling…')
+            self.status_detail_var.set('Preparing Chiaki, physical-pixel sizing, NR and Lossless Scaling…'
+                if nr else 'Preparing Chiaki, physical-pixel sizing, and Lossless Scaling…')
             self._sync_controls()
         except Exception as exc:
             _write_error_log('Failed to start the Chiaki chain')
@@ -909,7 +917,13 @@ class DailyApp:
             self._sync_controls()
 
     def start_chiaki_chain_30(self) -> None:
-        self.start_chiaki_chain(fps=30)
+        self.start_chiaki_chain(fps=30, nr=True)
+
+    def start_chiaki_lsfg(self) -> None:
+        self.start_chiaki_chain(fps=60, nr=False)
+
+    def start_chiaki_lsfg_30(self) -> None:
+        self.start_chiaki_chain(fps=30, nr=False)
 
     def _chiaki_can_start(self) -> bool:
         if self._chiaki_target() is not None:
@@ -1068,8 +1082,9 @@ class DailyApp:
         self.start_button.configure(state="normal" if has_target and self._mask_ready and not busy and not self._closing else "disabled")
         chain_state = 'normal' if not busy and not self._closing and self._chiaki_can_start() else 'disabled'
         self.chain_button.configure(state=chain_state)
-        if hasattr(self, 'chain_30_button'):
-            self.chain_30_button.configure(state=chain_state)
+        for attr in ('chain_30_button', 'chain_lsfg_button', 'chain_30_lsfg_button'):
+            if hasattr(self, attr):
+                getattr(self, attr).configure(state=chain_state)
         self.stop_button.configure(state="normal" if busy and self._last_state != "stopping" and not self._closing else "disabled")
         self.open_run_button.configure(
             state="normal" if self._run_path is not None and self._run_path.is_dir() else "disabled"

@@ -214,11 +214,13 @@ class DailyController:
             raise RuntimeError('The window changed during capture; preview discarded')
         return dict(width=width, height=height, ppm=preview)
 
-    def start_chiaki_chain(self, target=None, appearance_config=None, hold_identical_frames=False, fps=60):
+    def start_chiaki_chain(self, target=None, appearance_config=None, hold_identical_frames=False, fps=60, nr=True):
         if self.busy:
             raise RuntimeError('This panel already owns a running session')
         if type(fps) is not int or fps not in (30, 60):
             raise ValueError('Chiaki chain FPS must be 30 or 60')
+        if type(nr) is not bool:
+            raise ValueError('Chiaki chain NR flag must be a boolean')
         appearance = validate_appearance_config(self.appearance_settings if appearance_config is None else appearance_config)
         current = self._current_target(target) if target is not None else None
         from chain_controller import ChainController
@@ -226,10 +228,12 @@ class DailyController:
         # Retain ownership even if start raises after partially launching, so
         # the panel can still poll cleanup and request an authenticated stop.
         self.chain = chain
-        if fps == 60:
-            chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames)
-        else:
-            chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames, fps=fps)
+        extra = {}
+        if fps != 60:
+            extra['fps'] = fps
+        if not nr:
+            extra['nr'] = False
+        chain.start(current, appearance_config=appearance, hold_identical_frames=hold_identical_frames, **extra)
 
     def start(self, target, settings, *, persist=True, fps=120, panel_owner=None,
               appearance_preset='inherited', appearance_config=None):

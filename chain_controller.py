@@ -53,7 +53,7 @@ class ChainController:
     def busy(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, target, appearance_config=None, hold_identical_frames=False, fps=60):
+    def start(self, target, appearance_config=None, hold_identical_frames=False, fps=60, nr=True):
         if self.busy:
             raise RuntimeError('This panel already owns a Chiaki chain')
         appearance = validate_appearance_config(appearance_config if appearance_config is not None else preset_config('clean'))
@@ -61,6 +61,8 @@ class ChainController:
             raise ValueError('Hold identical frames must be a boolean')
         if type(fps) is not int or fps not in (30, 60):
             raise ValueError('Chiaki chain source FPS must be 30 or 60')
+        if type(nr) is not bool:
+            raise ValueError('Chiaki chain NR flag must be a boolean')
         if hold_identical_frames:
             from static_support import verify_static_build
             verify_static_build(self.root)
@@ -74,6 +76,8 @@ class ChainController:
                        owner_created=self.win.identity(os.getpid())[1])
         if fps != 60:
             request['fps'] = fps
+        if not nr:
+            request['nr'] = False
         atomic(self.job/'request.json', request)
         self.last = dict(state='starting', detail='Checking Chiaki, HDR and Lossless Scaling...',
                          geometry='Preparing physical 1920 x 1080 → 2560 x 1440',
@@ -151,7 +155,11 @@ def supervise(root, folder):
     source_fps = request.get('fps', 60)
     if type(source_fps) is not int or source_fps not in (30, 60):
         raise ValueError('Chiaki chain source FPS must be 30 or 60')
+    nr_enabled = request.get('nr', True)
+    if type(nr_enabled) is not bool:
+        raise ValueError('Chiaki chain NR flag must be a boolean')
     appearance_label = next(label for label, key in APPEARANCE_LABELS.items() if key == appearance['preset'])
+    stage_label = f'NR1080 ({appearance_label})' if nr_enabled else f'Bypass ({source_fps} FPS)'
     controller = DailyController(root)
     win = controller.win
     native = NativeChain(root, win)
@@ -173,13 +181,19 @@ def supervise(root, folder):
             print(state+': '+detail, flush=True)
             last_detail[0] = detail
         value = dict(token=token, state=state, detail=detail, run=str(folder),
-            geometry=f'Chiaki 1920 x 1080 → NR1080 ({appearance_label}) → LS1 2560 x 1440 → LSFG 2x',
+            geometry=f'Chiaki 1920 x 1080 → {stage_label} → LS1 2560 x 1440 → LSFG 2x',
             nr_confirmed=False, hardware_flow_active=False, hdr_status='HDR / Color-preserving / queued',
             chain_target=journal.get('target'), appearance=appearance)
         if snapshot:
             value.update(nr_confirmed=snapshot.get('nr_confirmed', False),
                          hardware_flow_active=snapshot.get('hardware_flow_active', False))
         atomic(folder/'status.json', value)
+
+    def worker_ready(snapshot):
+        if nr_enabled:
+            return bool(snapshot.get('nr_confirmed') and snapshot.get('hardware_flow_active'))
+        return bool(snapshot.get('state') == 'running' and not controller.metrics.get('suspended')
+                    and controller.metrics.get('renderer_pid') and controller.metrics.get('presented_frames', 0) > 0)
 
     def cancelled():
         if not alive(win, request.get('owner_pid'), request.get('owner_created')):
@@ -222,8 +236,9 @@ def supervise(root, folder):
         check_cancel()
         native.configure_ls(preflight, folder, lambda value: save('ls_config', value))
         check_cancel()
-        status('starting', f'Starting NR1080 ({appearance_label}) and hardware optical flow at {source_fps} source FPS...')
-        preset = dict(DEFAULTS, nr_height=1080, flow_width=1280, flow_grid=2, flow_preset='fast',
+        status('starting', f'Starting {stage_label} at {source_fps} source FPS...')
+        preset = dict(DEFAULTS, mode='nr' if nr_enabled else 'bypass',
+                      nr_height=1080, flow_width=1280, flow_grid=2, flow_preset='fast',
                       hdr=True, hdr_mapping='color-preserving', hdr_queued=True,
                       hold_identical_frames=hold_identical_frames)
         controller.start(target, preset, persist=False, fps=source_fps,
@@ -233,7 +248,7 @@ def supervise(root, folder):
         while controller.busy and time.monotonic() < until:
             check_cancel()
             snapshot = controller.poll()
-            if snapshot.get('nr_confirmed') and snapshot.get('hardware_flow_active'):
+            if worker_ready(snapshot):
                 break
             time.sleep(.2)
         else:
@@ -256,7 +271,7 @@ def supervise(root, folder):
         while time.monotonic() < until:
             check_cancel()
             snapshot = controller.poll()
-            if snapshot.get('nr_confirmed') and snapshot.get('hardware_flow_active'):
+            if worker_ready(snapshot):
                 break
             time.sleep(.1)
         else:
@@ -264,8 +279,9 @@ def supervise(root, folder):
         output = native.start_scaling(renderer, ls_record, preflight['monitor_rect'])
         save('outputs', output)
         check_cancel()
-        # A failed preflight/launch must not replace the user's saved look.
-        atomic(root/'nr-appearance.json', appearance)
+        if nr_enabled:
+            # A failed preflight/launch must not replace the user's saved look.
+            atomic(root/'nr-appearance.json', appearance)
         save('appearance', appearance)
         while True:
             if cancelled():
@@ -303,7 +319,7 @@ def supervise(root, folder):
             if snapshot.get('state') == 'suspended':
                 reason = 'capture_suspended'
                 break
-            status('running', f'Chiaki + NR1080 ({appearance_label}) + LS1 + LSFG 2x active. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens the panel.', snapshot)
+            status('running', f'Chiaki + {stage_label} + LS1 + LSFG 2x active. Ctrl+Alt+Q stops; Ctrl+Alt+F9 opens the panel.', snapshot)
             time.sleep(.5)
     except InterruptedError:
         reason = 'stop_requested'

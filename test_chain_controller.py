@@ -42,9 +42,10 @@ class ChainOwnershipTests(unittest.TestCase):
                 launch.assert_not_called()
             self.assertFalse((root/'runs').exists())
             with patch('static_support.verify_static_build'),patch('chain_controller.subprocess.Popen'):
-                c.start(None,hold_identical_frames=True,fps=30)
+                c.start(None,hold_identical_frames=True,fps=30,nr=False)
             self.assertIs(read_json(c.job/'request.json')['hold_identical_frames'],True)
             self.assertEqual(read_json(c.job/'request.json')['fps'],30)
+            self.assertIs(read_json(c.job/'request.json')['nr'],False)
 
     def test_atomic_status_updates_with_concurrent_reader(self):
         with tempfile.TemporaryDirectory() as d:
