@@ -330,6 +330,8 @@ class DailyApp:
         self.hdr_mapping_var = self.tk.StringVar()
         self.hdr_queued_var = self.tk.BooleanVar(value=False)
         self.hold_identical_frames_var = self.tk.BooleanVar(value=False)
+        self.chain_nr_var = self.tk.BooleanVar(value=True)
+        self.chain_fps_var = self.tk.IntVar(value=60)
         self.mask_profile_var = self.tk.StringVar()
         self.mask_summary_var = self.tk.StringVar()
         self.nr_height_var = self.tk.IntVar()
@@ -414,21 +416,18 @@ class DailyApp:
         controls.rowconfigure(4, minsize=48)
         self.ttk.Label(controls, textvariable=self.mask_summary_var, style='Muted.TLabel',
                        wraplength=730, justify='left').grid(row=4, column=0, columnspan=3, sticky='ew', pady=(7, 0))
-        self.chain_button = self.ttk.Button(controls, text='Play Chiaki + NR + LSFG (60 → 120 FPS)',
+        self.chain_button = self.ttk.Button(controls, text='Play Chiaki',
             command=self.start_chiaki_chain)
-        self.chain_button.grid(row=5, column=0, columnspan=2, sticky='ew', padx=(0, 10), pady=(6, 0))
-        self.chain_30_button = self.ttk.Button(controls, text='Play Chiaki 30 FPS + NR + LSFG (30 → 60 FPS)',
-            command=self.start_chiaki_chain_30)
-        self.chain_30_button.grid(row=5, column=2, sticky='ew', pady=(6, 0))
-        self.chain_lsfg_button = self.ttk.Button(controls, text='Play Chiaki + LSFG (60 → 120 FPS)',
-            command=self.start_chiaki_lsfg)
-        self.chain_lsfg_button.grid(row=6, column=0, columnspan=2, sticky='ew', padx=(0, 10), pady=(6, 0))
-        self.chain_30_lsfg_button = self.ttk.Button(controls, text='Play Chiaki 30 FPS + LSFG (30 → 60 FPS)',
-            command=self.start_chiaki_lsfg_30)
-        self.chain_30_lsfg_button.grid(row=6, column=2, sticky='ew', pady=(6, 0))
+        self.chain_button.grid(row=5, column=0, sticky='ew', padx=(0, 10), pady=(6, 0))
+        self.chain_nr_check = self.ttk.Checkbutton(controls, text='Neural Rendering',
+            variable=self.chain_nr_var)
+        self.chain_nr_check.grid(row=5, column=1, sticky='w', padx=(0, 10), pady=(6, 0))
+        self.chain_fps_frame = self._radio_row(controls, 5, self.chain_fps_var, (60, 30),
+            labels={60: '60 → 120 FPS', 30: '30 → 60 FPS'})
+        self.chain_fps_frame.grid_configure(column=2, pady=(6, 0))
         self.ttk.Label(controls, style='Muted.TLabel', wraplength=730, justify='left',
-            text='NR1080 (flow 720 / G2 Fast) or Bypass → LS1 1440p → LSFG 2x · 30 FPS modes drop duplicate 60 Hz stream frames.').grid(
-                row=7, column=0, columnspan=3, sticky='ew', pady=(4, 0))
+            text='Chiaki 1080p → NR1080 (flow 720 / G2 Fast) or Bypass → LS1 1440p → LSFG 2x · 30 → 60 FPS drops duplicate 60 Hz stream frames.').grid(
+                row=6, column=0, columnspan=3, sticky='ew', pady=(4, 0))
 
         self.body_notebook = self.ttk.Notebook(outer)
         self.body_notebook.grid(row=3, column=0, sticky='nsew')
@@ -893,37 +892,30 @@ class DailyApp:
         installations = {str(PureWindowsPath(target['exe'])).casefold() for target in candidates}
         return candidates[0] if candidates and len(installations) == 1 else None
 
-    def start_chiaki_chain(self, fps: int = 60, nr: bool = True) -> None:
+    def start_chiaki_chain(self, fps: int | None = None, nr: bool | None = None) -> None:
         target = self._chiaki_target()
         if not self._chiaki_can_start():
             self.messagebox.showwarning(APP_TITLE, 'Select a Chiaki window when multiple installations or an unrelated application are listed.')
             return
         try:
+            selected_fps = int(self.chain_fps_var.get()) if fps is None and hasattr(self, 'chain_fps_var') else (60 if fps is None else fps)
+            selected_nr = bool(self.chain_nr_var.get()) if nr is None and hasattr(self, 'chain_nr_var') else (True if nr is None else nr)
             extra = {}
-            if fps != 60:
-                extra['fps'] = fps
-            if not nr:
+            if selected_fps != 60:
+                extra['fps'] = selected_fps
+            if not selected_nr:
                 extra['nr'] = False
             self.controller.start_chiaki_chain(target, appearance_config=self._appearance_from_form(),
                 hold_identical_frames=bool(self.hold_identical_frames_var.get()), **extra)
             self._last_state = 'starting'
             self.status_state_var.set('STARTING')
             self.status_detail_var.set('Preparing Chiaki, physical-pixel sizing, NR and Lossless Scaling…'
-                if nr else 'Preparing Chiaki, physical-pixel sizing, and Lossless Scaling…')
+                if selected_nr else 'Preparing Chiaki, physical-pixel sizing, and Lossless Scaling…')
             self._sync_controls()
         except Exception as exc:
             _write_error_log('Failed to start the Chiaki chain')
             self.messagebox.showerror(APP_TITLE, f'The Chiaki chain could not start.\n\n{exc}')
             self._sync_controls()
-
-    def start_chiaki_chain_30(self) -> None:
-        self.start_chiaki_chain(fps=30, nr=True)
-
-    def start_chiaki_lsfg(self) -> None:
-        self.start_chiaki_chain(fps=60, nr=False)
-
-    def start_chiaki_lsfg_30(self) -> None:
-        self.start_chiaki_chain(fps=30, nr=False)
 
     def _chiaki_can_start(self) -> bool:
         if self._chiaki_target() is not None:
@@ -1082,9 +1074,11 @@ class DailyApp:
         self.start_button.configure(state="normal" if has_target and self._mask_ready and not busy and not self._closing else "disabled")
         chain_state = 'normal' if not busy and not self._closing and self._chiaki_can_start() else 'disabled'
         self.chain_button.configure(state=chain_state)
-        for attr in ('chain_30_button', 'chain_lsfg_button', 'chain_30_lsfg_button'):
-            if hasattr(self, attr):
-                getattr(self, attr).configure(state=chain_state)
+        if hasattr(self, 'chain_nr_check'):
+            self.chain_nr_check.configure(state='disabled' if busy or self._closing else 'normal')
+        if hasattr(self, 'chain_fps_frame'):
+            for child in self.chain_fps_frame.winfo_children():
+                child.configure(state='disabled' if busy or self._closing else 'normal')
         self.stop_button.configure(state="normal" if busy and self._last_state != "stopping" and not self._closing else "disabled")
         self.open_run_button.configure(
             state="normal" if self._run_path is not None and self._run_path.is_dir() else "disabled"
