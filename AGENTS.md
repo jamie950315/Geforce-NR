@@ -59,7 +59,7 @@ post-HUD frames with live WGC and NVOFA. Its pixel checks pass; its synchronous
 readback runs are visual diagnostics only and are rejected by the timing evaluator.
 `native-repaired` remains the default; never promote `native-live-pair` for speed.
 
-The user-selected mainline defaults are NR720 + flow1280/G2/Fast in the isolated
+The user-selected mainline defaults are NR900 + flow320 (Optical flow height 180)/G2/Fast in the isolated
 launcher. Resolution tuning exposes NR 720/900/1080/1440 and explicit flow
 width/grid/preset overrides. Five 60-second live samples support this 120-oriented
 configuration; NR900/1080 local processing p95 is 8.88/10.48 ms. G2 Medium at NR720
